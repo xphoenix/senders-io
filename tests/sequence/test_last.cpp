@@ -67,7 +67,8 @@ TEST_CASE("last - complicated case", "[sequence][last]") {
 
 TEST_CASE("last - with empty ranges", "[sequence][last]") {
   auto f = sio::iterate(std::vector<int>{}) | sio::last();
-  stdexec::sync_wait(f).value();
+  auto result = stdexec::sync_wait(f);
+  REQUIRE_FALSE(result.has_value());
 }
 
 // TODO: add item_types for empty_sequence

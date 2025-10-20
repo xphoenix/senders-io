@@ -2,9 +2,7 @@ include(FetchContent)
 FetchContent_Declare(
   stdexec
   GIT_REPOSITORY https://github.com/NVIDIA/stdexec.git
-
-  # branch: main. date: 2024-08-13
-  GIT_TAG 54b38c99e8cbb348c1dd3508fa540728882247db
+  GIT_TAG nvhpc-25.09
 )
 
 set(STDEXEC_BUILD_EXAMPLES OFF CACHE BOOL "close stdexec examples")

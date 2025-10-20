@@ -102,6 +102,8 @@ namespace exec {
   namespace __get_sequence_env {
     using namespace stdexec;
 
+    using empty_env = stdexec::env<>;
+
     struct get_sequence_env_t {
       template <sequence_sender<empty_env> Sequence>
         requires tag_invocable<get_sequence_env_t, const Sequence&>

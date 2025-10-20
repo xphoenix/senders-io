@@ -113,16 +113,16 @@ namespace sio::async {
     requires with_open<Resource, Env>
   using token_of_t = stdexec::__single_sender_value_t<call_result_t<open_t, Resource&>, Env>;
 
-  template <class Sndr, class Env = stdexec::empty_env>
-  concept sender_of_void =                              //
-    stdexec::sender_of<Sndr, stdexec::set_value_t()> && //
-    stdexec::__single_value_sender<Sndr, Env>;
+  // A lightweight check for a sender that completes with set_value() and no value.
+  // Do not require __single_value_sender here to accommodate senders that do not
+  // model single-value under a given Env but are still valid for closing.
+  template <class Sndr, class Env = stdexec::env<>>
+  concept sender_of_void = stdexec::sender_of<Sndr, stdexec::set_value_t()>;
 
-  template <class Resource, class Env = stdexec::empty_env>
+  template <class Resource, class Env = stdexec::env<>>
   concept with_open_and_close =
-    with_open<Resource, Env> && requires(Resource& resource, token_of_t<Resource, Env>& token) {
-      { close(token) } -> sender_of_void;
-    };
+    with_open<Resource, Env>
+    && sender_of_void<decltype(close(std::declval<token_of_t<Resource, Env>&>())), Env>;
 
   namespace async_resource_ {
     template <class Receiver>
@@ -336,14 +336,16 @@ namespace sio::async {
     stdexec::__msingle_or<void>,
     stdexec::__q<stdexec::__msingle>>;
 
-  template <resource Resource, class Env = stdexec::empty_env>
+  template <resource Resource, class Env = stdexec::env<>>
   using resource_token_of_t = decay_t<single_item_value_t<call_result_t<use_t, Resource&>, Env>>;
 
   struct use_resources_t {
     template <class Fn, class... DeferredResources>
     auto operator()(Fn&& fn, DeferredResources&&... resources) const {
       return sio::first(
-        sio::let_value_each(sio::zip(sio::async::use(resources)...), static_cast<Fn&&>(fn)));
+        sio::let_value_each(
+          sio::zip(sio::async::use(static_cast<DeferredResources&&>(resources))...),
+          static_cast<Fn&&>(fn)));
     }
   };
 

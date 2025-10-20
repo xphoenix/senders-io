@@ -380,7 +380,7 @@ namespace sio::async {
            && std::constructible_from<ip::resolver_query, _Arg, _Args...>
     auto operator()(_Arg&& __arg, _Args&&... __args) const {
       return this->operator()(
-        exec::inline_scheduler(),
+        stdexec::inline_scheduler(),
         ip::resolver_query{static_cast<_Arg&&>(__arg), static_cast<_Args&&>(__args)...});
     }
   };
