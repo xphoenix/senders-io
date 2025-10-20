@@ -186,9 +186,9 @@ namespace sio {
       operation_base<ReceiverId, ResultVariant, IsLockStep>* op_;
 
       template <class Item>
-      friend auto tag_invoke(exec::set_next_t, receiver& self, Item&& item) noexcept(
-        nothrow_decay_copyable<Item>) -> item_sender<decay_t<Item>, ResultVariant, IsLockStep> {
-        return {static_cast<Item&&>(item), self.op_};
+      auto set_next(Item&& item) noexcept(nothrow_decay_copyable<Item>)
+        -> item_sender<decay_t<Item>, ResultVariant, IsLockStep> {
+        return {static_cast<Item&&>(item), op_};
       }
 
       void set_value() && noexcept {

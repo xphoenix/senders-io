@@ -301,13 +301,13 @@ namespace sio {
       operation_base<SeqRcvr, ErrorsVariant>* op_;
 
       template <class Item>
-      friend auto tag_invoke(exec::set_next_t, receiver& self, Item&& item) {
+      auto set_next(Item&& item) {
         return stdexec::just(static_cast<Item&&>(item))
-             | stdexec::let_value([op = self.op_](Item& item) noexcept {
+             | stdexec::let_value([op = op_](Item& item) noexcept {
                  return if_then_else(
                    op->increase_ref(), static_cast<Item&&>(item), stdexec::just_stopped());
                })
-             | stdexec::let_value([op = self.op_]<class... Vals>(Vals&&... values) noexcept {
+             | stdexec::let_value([op = op_]<class... Vals>(Vals&&... values) noexcept {
                  using just_t = decltype(stdexec::just(std::forward<Vals>(values)...));
                  using item_op_t = item_operation<just_t, SeqRcvr, ErrorsVariant>;
                  return sio::async::async_new(
@@ -318,11 +318,11 @@ namespace sio {
                           stdexec::start(*item_op);
                         });
                })
-             | stdexec::upon_stopped([op = self.op_]() noexcept {
+             | stdexec::upon_stopped([op = op_]() noexcept {
                  op->request_stop();
                  op->decrease_ref();
                })
-             | stdexec::upon_error([op = self.op_]<class Err>(Err&& err) noexcept {
+             | stdexec::upon_error([op = op_]<class Err>(Err&& err) noexcept {
                  op->set_error(static_cast<Err&&>(err));
                  op->request_stop();
                  op->decrease_ref();

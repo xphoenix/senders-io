@@ -391,10 +391,9 @@ namespace sio {
       operation_base<Receiver, ResultTuple, ErrorsVariant>* op_;
 
       template <class Item>
-      friend auto tag_invoke(exec::set_next_t, receiver& self, Item&& item) noexcept(
-        nothrow_decay_copyable<Item>)
+      auto set_next(Item&& item) noexcept(nothrow_decay_copyable<Item>)
         -> item_sender<Index, decay_t<Item>, Receiver, ResultTuple, ErrorsVariant> {
-        return {static_cast<Item&&>(item), self.op_};
+        return {static_cast<Item&&>(item), op_};
       }
 
       void set_value() && noexcept {

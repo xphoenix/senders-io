@@ -149,11 +149,11 @@ namespace sio {
       operation_base<Receiver, Tp, Fn, IsLockStep>* op_;
 
       template <class ItemSender>
-      friend auto tag_invoke(exec::set_next_t, receiver& self, ItemSender&& sndr)
-        -> exec::next_sender_of_t< Receiver, item_sender_t<ItemSender>> {
+      auto set_next(ItemSender&& sndr)
+        -> exec::next_sender_of_t<Receiver, item_sender_t<ItemSender>> {
         return exec::set_next(
-          self.op_->rcvr_,
-          receiver::item_sender_t<ItemSender>{static_cast<ItemSender&&>(sndr), &self.op_->data_});
+          op_->rcvr_,
+          receiver::item_sender_t<ItemSender>{static_cast<ItemSender&&>(sndr), &op_->data_});
       }
 
       void set_value() && noexcept {

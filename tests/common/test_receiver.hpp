@@ -6,7 +6,7 @@ struct any_sequence_receiver {
   using receiver_concept = stdexec::receiver_t;
 
   template <class Sender>
-  friend auto tag_invoke(exec::set_next_t, any_sequence_receiver& self, Sender&& s) noexcept {
+  auto set_next(Sender&&) noexcept {
     return stdexec::just();
   }
 

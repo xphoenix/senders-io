@@ -339,12 +339,19 @@ namespace sio::async {
       Scheduler scheduler_;
       ip::resolver_query query_;
 
-      template <decays_to<sender> Self, class Receiver>
-      friend operation<Scheduler, Receiver>
-        tag_invoke(exec::subscribe_t, Self&& self, Receiver receiver) {
+      template <stdexec::receiver Receiver>
+      auto subscribe(Receiver receiver) && -> operation<Scheduler, Receiver> {
         return operation<Scheduler, Receiver>{
-          static_cast<Scheduler&&>(self.scheduler_),
-          static_cast<ip::resolver_query&&>(self.query_),
+          static_cast<Scheduler&&>(scheduler_),
+          static_cast<ip::resolver_query&&>(query_),
+          static_cast<Receiver&&>(receiver)};
+      }
+
+      template <stdexec::receiver Receiver>
+      auto subscribe(Receiver receiver) const&& -> operation<Scheduler, Receiver> {
+        return operation<Scheduler, Receiver>{
+          Scheduler{scheduler_},
+          ip::resolver_query{query_},
           static_cast<Receiver&&>(receiver)};
       }
     };

@@ -257,10 +257,16 @@ namespace sio::async {
 
       Resource resource_;
 
-      template <class Receiver>
-      friend auto tag_invoke(exec::subscribe_t, sequence&& self, Receiver rcvr) noexcept(
-        nothrow_decay_copyable<Receiver>) -> operation<Resource, Receiver> {
-        return {self.resource_, static_cast<Receiver&&>(rcvr)};
+      template <stdexec::receiver Receiver>
+      auto subscribe(Receiver rcvr) && noexcept(nothrow_decay_copyable<Receiver>)
+        -> operation<Resource, Receiver> {
+        return {static_cast<Resource&&>(resource_), static_cast<Receiver&&>(rcvr)};
+      }
+
+      template <stdexec::receiver Receiver>
+      auto subscribe(Receiver rcvr) const&& noexcept(nothrow_decay_copyable<Receiver>)
+        -> operation<Resource, Receiver> {
+        return {resource_, static_cast<Receiver&&>(rcvr)};
       }
 
       template <class Env>
@@ -272,7 +278,25 @@ namespace sio::async {
           stdexec::__mconst<stdexec::completion_signatures<>>::__f>;
 
       template <class Env>
-      friend auto tag_invoke(exec::get_item_types_t, sequence&& self, Env&&) noexcept
+      auto get_item_types(Env&&) & noexcept
+        -> exec::item_types<use_sender<token_of_t<Resource, Env>>> {
+        return {};
+      }
+
+      template <class Env>
+      auto get_item_types(Env&&) const& noexcept
+        -> exec::item_types<use_sender<token_of_t<Resource, Env>>> {
+        return {};
+      }
+
+      template <class Env>
+      auto get_item_types(Env&&) && noexcept
+        -> exec::item_types<use_sender<token_of_t<Resource, Env>>> {
+        return {};
+      }
+
+      template <class Env>
+      auto get_item_types(Env&&) const&& noexcept
         -> exec::item_types<use_sender<token_of_t<Resource, Env>>> {
         return {};
       }

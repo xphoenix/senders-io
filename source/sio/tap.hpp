@@ -135,12 +135,21 @@ namespace sio {
 
       using item_types = exec::item_types<tap_next_sender_of_t<InitialSender, FinalSender>>;
 
-      template <decays_to<sequence> Self, stdexec::receiver Receiver>
-      friend auto tag_invoke(exec::subscribe_t, Self&& self, Receiver receiver)
-        -> operation<copy_cvref_t<Self, InitialSender>, copy_cvref_t<Self, FinalSender>, Receiver> {
+      template <stdexec::receiver Receiver>
+      auto subscribe(Receiver receiver) &&
+        -> operation<InitialSender, FinalSender, Receiver> {
         return {
-          static_cast<Self&&>(self).initial_,
-          static_cast<Self&&>(self).final_,
+          static_cast<InitialSender&&>(initial_),
+          static_cast<FinalSender&&>(final_),
+          static_cast<Receiver&&>(receiver)};
+      }
+
+      template <stdexec::receiver Receiver>
+      auto subscribe(Receiver receiver) const&&
+        -> operation<const InitialSender, const FinalSender, Receiver> {
+        return {
+          static_cast<const InitialSender&&>(initial_),
+          static_cast<const FinalSender&&>(final_),
           static_cast<Receiver&&>(receiver)};
       }
 

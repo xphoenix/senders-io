@@ -33,9 +33,8 @@ namespace sio {
       operation<Sender, Receiver>* base_;
 
       template <class Item>
-      friend auto tag_invoke(exec::set_next_t, receiver& self, Item&& item)
-        -> exec::next_sender_of_t<Receiver, Item> {
-        return exec::set_next(self.base_->rcvr_, static_cast<Item&&>(item));
+      auto set_next(Item&& item) -> exec::next_sender_of_t<Receiver, Item> {
+        return exec::set_next(base_->rcvr_, static_cast<Item&&>(item));
       }
 
       void set_value() && noexcept {

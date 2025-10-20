@@ -54,9 +54,8 @@ namespace sio {
 
       template <class Item>
         requires callable<exec::set_next_t, Receiver&, Item>
-      friend auto tag_invoke(exec::set_next_t, receiver& self, Item&& item)
-        -> exec::next_sender_of_t< Receiver, Item> {
-        return exec::set_next(self.op_->receiver_, static_cast<Item&&>(item));
+      auto set_next(Item&& item) -> exec::next_sender_of_t<Receiver, Item> {
+        return exec::set_next(op_->receiver_, static_cast<Item&&>(item));
       }
 
       void complete() noexcept {

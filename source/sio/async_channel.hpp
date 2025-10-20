@@ -101,10 +101,10 @@ namespace sio {
     struct wrap_receiver {
       using is_receiver = void;
       subscribe_operation<Completions, Receiver>* op_;
-      stdexec::env_of_t<Receiver> get_env(stdexec::get_env_t) const noexcept;
+      auto get_env() const noexcept -> stdexec::env_of_t<Receiver>;
 
       template <class Sender>
-      exec::next_sender_of_t<Receiver, Sender> set_next(exec::set_next_t, Sender&& sndr);
+      exec::next_sender_of_t<Receiver, Sender> set_next(Sender&& sndr);
       void set_value(stdexec::set_value_t) && noexcept;
     };
 
@@ -113,7 +113,7 @@ namespace sio {
       using is_receiver = void;
       subscribe_operation<Completions, Receiver>* op_;
 
-      stdexec::env<> get_env(stdexec::get_env_t) const noexcept {
+      auto get_env() const noexcept -> stdexec::env<> {
         return {};
       }
 
@@ -123,7 +123,7 @@ namespace sio {
     struct nop_receiver {
       using is_receiver = void;
 
-      stdexec::env<> get_env(stdexec::get_env_t) const noexcept {
+      auto get_env() const noexcept -> stdexec::env<> {
         return {};
       }
 
@@ -187,17 +187,17 @@ namespace sio {
     }
 
     template <class Completions, class Receiver>
-    stdexec::env_of_t<Receiver>
-      wrap_receiver<Completions, Receiver>::get_env(stdexec::get_env_t) const noexcept {
+    auto wrap_receiver<Completions, Receiver>::get_env() const noexcept
+      -> stdexec::env_of_t<Receiver> {
       return stdexec::get_env(op_->rcvr_);
     }
 
     template <class Completions, class Receiver>
-    template <class Sender>
-    exec::next_sender_of_t<Receiver, Sender>
-      wrap_receiver<Completions, Receiver>::set_next(exec::set_next_t, Sender&& sndr) {
-      return exec::set_next(op_->rcvr_, std::forward<Sender>(sndr));
-    }
+      template <class Sender>
+      exec::next_sender_of_t<Receiver, Sender>
+        wrap_receiver<Completions, Receiver>::set_next(Sender&& sndr) {
+        return exec::set_next(op_->rcvr_, std::forward<Sender>(sndr));
+      }
 
     template <class Completions, class Receiver>
     void wrap_receiver<Completions, Receiver>::set_value(stdexec::set_value_t) && noexcept {
@@ -216,12 +216,11 @@ namespace sio {
 
     template <class Completions>
     struct subscribe_sequence {
-      using is_sender = exec::sequence_tag;
+      using sender_concept = exec::sequence_sender_t;
       using completion_signatures = stdexec::completion_signatures<stdexec::set_value_t()>;
 
-      template <class Receiver>
-      auto subscribe(exec::subscribe_t, Receiver rcvr) const noexcept
-        -> subscribe_operation<Completions, Receiver> {
+      template <stdexec::receiver Receiver>
+      auto subscribe(Receiver rcvr) const noexcept -> subscribe_operation<Completions, Receiver> {
         return {std::move(rcvr), channel_};
       }
 

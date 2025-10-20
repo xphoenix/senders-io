@@ -34,7 +34,7 @@ TEST_CASE("async::resolve - Resolve ipv4 localhost", "[net][resolve][first]") {
 TEST_CASE("async::resolve - Resolve ipv6 localhost", "[net][resolve][first]") {
   auto sndr = sio::first(sio::async::resolve(sio::ip::tcp::v6(), "localhost", "80"));
   try {
-    auto result = stdexec::sync_wait(sndr);
+    auto result = stdexec::sync_wait(std::move(sndr));
     CHECK(result);
     auto [response] = result.value();
     CHECK(response.endpoint().address().is_v6());
