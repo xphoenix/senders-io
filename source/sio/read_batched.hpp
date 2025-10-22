@@ -19,7 +19,9 @@ namespace sio::async {
       zip(iterate(buffers), iterate(offsets)) //
       | fork()                                //
       | let_value_each(
-        [stream](buffer_type_of_t<ByteStream> buffer, offset_type_of_t<ByteStream> offset) {
+        [stream = std::move(stream)](
+          buffer_type_of_t<ByteStream> buffer,
+          offset_type_of_t<ByteStream> offset) mutable {
           return async::read(stream, buffer, offset);
         })
       | ignore_all();

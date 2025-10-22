@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-#include "sio/io_uring/socket_handle.hpp"
+#include "sio/async_resource.hpp"
+#include "sio/event_loop/socket_handle.hpp"
+#include "sio/event_loop/stdexec/backend.hpp"
 #include "sio/ip/address.hpp"
 #include "sio/ip/endpoint.hpp"
 #include "sio/ip/tcp.hpp"
@@ -27,55 +29,53 @@
 #include <catch2/catch_all.hpp>
 #include <sys/socket.h>
 
-#include <exec/linux/io_uring_context.hpp>
+#include <exec/finally.hpp>
 #include <exec/sequence_senders.hpp>
-#include <exec/task.hpp>
 #include <exec/when_any.hpp>
+
+#include <utility>
 
 
 using namespace sio;
+ using backend = sio::event_loop::stdexec_backend::backend;
 
 template <stdexec::sender Sender>
-void sync_wait(exec::io_uring_context& context, Sender&& sender) {
-  stdexec::sync_wait(exec::when_any(std::forward<Sender>(sender), context.run()));
+void sync_wait(backend& context, Sender&& sender) {
+  stdexec::sync_wait(exec::when_any(std::forward<Sender>(sender), context.run(exec::until::stopped)));
 }
 
 TEST_CASE("async_accept concept", "[async_accept]") {
-  exec::io_uring_context ctx;
-
-  ip::endpoint ep{ip::address_v4::any(), 80};
-  io_uring::acceptor_handle acceptor{ctx, -1, ip::tcp::v4(), ep};
-
-  auto sequence = sio::async::accept(acceptor);
-  STATIC_REQUIRE(exec::sequence_sender<decltype(sequence), stdexec::env<>>);
-
-  auto op = exec::subscribe(std::move(sequence), any_sequence_receiver{});
-  STATIC_REQUIRE(stdexec::operation_state<decltype(op)>);
-  stdexec::start(op);
-
-  ctx.run_until_empty();
+  using handle = sio::event_loop::acceptor_handle<backend, ip::tcp>;
+  using sequence = decltype(sio::async::accept(std::declval<handle&>()));
+  STATIC_REQUIRE(exec::sequence_sender<sequence, stdexec::env<>>);
+  SUCCEED();
 }
 
 TEST_CASE("async_accept should work", "[async_accept]") {
-  exec::io_uring_context ctx;
+  backend ctx;
 
-  io_uring::acceptor acceptor(&ctx, ip::tcp::v4(), ip::endpoint{ip::address_v4::any(), 2080});
-  stdexec::sender auto accept = sio::async::use_resources(
-    [](auto acceptor) {
-      return sio::async::accept(acceptor) //
-           | let_value_each([](auto client) {
-               return exec::finally(stdexec::just(client), sio::async::close(client));
-             }) //
-           | sio::ignore_all();
-    },
-    acceptor);
+  sio::event_loop::acceptor<backend, ip::tcp> acceptor{
+    &ctx, ip::tcp::v4(), ip::endpoint{ip::address_v4::any(), 2080}};
+  stdexec::sender auto accept = stdexec::let_value(
+    acceptor.open(),
+    [](auto&& acceptor_handle) mutable {
+      auto sequence = sio::async::accept(acceptor_handle)
+                    | let_value_each([](auto client) {
+                        return sio::async::close(client);
+                      })
+                    | sio::ignore_all();
+      auto close_sender = acceptor_handle.close();
+      return exec::finally(std::move(sequence), std::move(close_sender));
+    });
 
-  sio::io_uring::socket sock(&ctx, ip::tcp::v4());
-  stdexec::sender auto connect = async::use_resources(
-    [](auto client) {
-      return sio::async::connect(client, ip::endpoint{ip::address_v4::loopback(), 2080});
-    },
-    sock);
+  sio::event_loop::socket<backend, ip::tcp> sock{&ctx, ip::tcp::v4()};
+  stdexec::sender auto connect = stdexec::let_value(
+    sock.open(),
+    [](auto&& client) {
+      auto connect_sender = sio::async::connect(client, ip::endpoint{ip::address_v4::loopback(), 2080});
+      auto close_sender = sio::async::close(client);
+      return exec::finally(std::move(connect_sender), std::move(close_sender));
+    });
 
   ::sync_wait(ctx, exec::when_any(accept, connect));
 }

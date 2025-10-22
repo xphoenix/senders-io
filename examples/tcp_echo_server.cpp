@@ -1,6 +1,7 @@
 #include <sio/net_concepts.hpp>
 #include <sio/ip/tcp.hpp>
-#include <sio/io_uring/socket_handle.hpp>
+#include <sio/event_loop/socket_handle.hpp>
+#include <sio/event_loop/stdexec/backend.hpp>
 #include <sio/sequence/let_value_each.hpp>
 #include <sio/sequence/ignore_all.hpp>
 
@@ -19,8 +20,9 @@ exec::variant_sender<ThenSender, ElseSender>
   return otherwise;
 }
 
-using tcp_socket = sio::io_uring::socket_handle<sio::ip::tcp>;
-using tcp_acceptor = sio::io_uring::acceptor_handle<sio::ip::tcp>;
+using backend = sio::event_loop::stdexec_backend::backend;
+using tcp_socket = sio::event_loop::socket_handle<backend, sio::ip::tcp>;
+using tcp_acceptor = sio::event_loop::acceptor_handle<backend, sio::ip::tcp>;
 
 auto echo_input(tcp_socket client) {
   return stdexec::let_value(
@@ -40,9 +42,10 @@ auto echo_input(tcp_socket client) {
 }
 
 int main() {
-  exec::io_uring_context context{};
+  backend context{};
   auto endpoint = sio::ip::endpoint{sio::ip::address_v4::any(), 1080};
-  auto acceptor = sio::io_uring::acceptor{&context, sio::ip::tcp::v4(), endpoint};
+  auto acceptor = sio::event_loop::acceptor<backend, sio::ip::tcp>{
+    &context, sio::ip::tcp::v4(), endpoint};
 
   auto accept_connections = sio::async::use_resources(
     [&](tcp_acceptor acceptor) {

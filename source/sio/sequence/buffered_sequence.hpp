@@ -32,6 +32,8 @@ namespace sio {
     const_buffer to_buffer_sequence(const const_buffer&);
     mutable_buffer_span to_buffer_sequence(const std::span<mutable_buffer>&);
     const_buffer_span to_buffer_sequence(const std::span<const_buffer>&);
+    mutable_buffer_span to_buffer_sequence(const mutable_buffer_span&);
+    const_buffer_span to_buffer_sequence(const const_buffer_span&);
 
     template <class Buffer>
     using buffer_sequence_of_t = decltype(to_buffer_sequence(std::declval<Buffer>()));

@@ -30,7 +30,6 @@ endif()
 add_library(sio
   source/sio/const_buffer_span.cpp
   source/sio/mutable_buffer_span.cpp
-  source/sio/io_uring/file_handle.cpp
   source/sio/memory_pool.cpp)
 add_library(sio::sio ALIAS sio)
 target_include_directories(sio
@@ -67,8 +66,19 @@ target_sources(sio PUBLIC
     source/sio/sequence/transform_each.hpp
     source/sio/sequence/finally.hpp
     source/sio/sequence/zip.hpp
-    source/sio/io_uring/file_handle.hpp
-    source/sio/io_uring/socket_handle.hpp
+    source/sio/event_loop/concepts.hpp
+    source/sio/event_loop/file_handle.hpp
+    source/sio/event_loop/socket_handle.hpp
+    source/sio/event_loop/stdexec/backend.hpp
+    source/sio/event_loop/stdexec/details.h
+    source/sio/event_loop/stdexec/fd_close.h
+    source/sio/event_loop/stdexec/fd_read.h
+    source/sio/event_loop/stdexec/fd_write.h
+    source/sio/event_loop/stdexec/file_open.h
+    source/sio/event_loop/stdexec/socket_accept.h
+    source/sio/event_loop/stdexec/socket_connect.h
+    source/sio/event_loop/stdexec/socket_open.h
+    source/sio/event_loop/stdexec/socket_sendmsg.h
     source/sio/assert.hpp
     source/sio/async_allocator.hpp
     source/sio/async_channel.hpp

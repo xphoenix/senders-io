@@ -15,7 +15,8 @@
  */
 
 #include "sio/buffer.hpp"
-#include "sio/io_uring/file_handle.hpp"
+#include "sio/event_loop/stdexec/fd_read.h"
+#include "sio/event_loop/stdexec/fd_write.h"
 #include "sio/mutable_buffer.hpp"
 #include "sio/sequence/buffered_sequence.hpp"
 #include "sio/sequence/ignore_all.hpp"
@@ -70,7 +71,7 @@ TEST_CASE("buffered_sequence - with read_factory and single buffer", "[sio][buff
 
   constexpr auto content = std::string_view{"hello world"};
   write_to_file(fd, content);
-  auto factory = sio::io_uring::read_factory{&ctx, fd};
+  auto factory = sio::event_loop::stdexec_backend::read_factory{&ctx, fd};
 
   // write to storage
   auto storage = std::string(content.size(), '0');
@@ -89,7 +90,7 @@ TEST_CASE(
 
   constexpr auto content = std::string_view{"hello world"};
   write_to_file(fd, content);
-  auto factory = sio::io_uring::read_factory{&ctx, fd};
+  auto factory = sio::event_loop::stdexec_backend::read_factory{&ctx, fd};
 
   // write to storage
   auto storage1 = std::string(6, '0');
@@ -108,7 +109,7 @@ TEST_CASE("buffered_sequence - with write_factory and single buffer", "[sio][buf
   auto fd = create_memfd("with_write_factory");
   REQUIRE(fd != -1);
 
-  auto factory = sio::io_uring::write_factory{&ctx, fd};
+  auto factory = sio::event_loop::stdexec_backend::write_factory{&ctx, fd};
   const auto content = std::string{"hello world"};
   auto buffer = sio::buffer(content);
   auto buffered_write_some = sio::buffered_sequence(factory, buffer, 0);
