@@ -79,6 +79,12 @@ target_sources(sio PUBLIC
     source/sio/event_loop/stdexec/socket_connect.h
     source/sio/event_loop/stdexec/socket_open.h
     source/sio/event_loop/stdexec/socket_sendmsg.h
+    source/sio/event_loop/iouring/backend.hpp
+    source/sio/event_loop/iouring/context.hpp
+    source/sio/event_loop/iouring/details.hpp
+    source/sio/event_loop/iouring/operations.hpp
+    source/sio/event_loop/iouring/run_sender.hpp
+    source/sio/event_loop/iouring/scheduler.hpp
     source/sio/assert.hpp
     source/sio/async_allocator.hpp
     source/sio/async_channel.hpp
