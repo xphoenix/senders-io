@@ -7,11 +7,17 @@ elseif (NOT TARGET sio::sio)
   message(FATAL_ERROR "sio::sio target is not defined. Please use add_subdirectory to add sio to your project")
 endif ()
 
+if (NOT TARGET sio::sio_backend_stdexec)
+  message(FATAL_ERROR "Examples require the stdexec backend. Enable SIO_ENABLE_BACKEND_STDEXEC.")
+endif()
+
+# find_package(fmt REQUIRED)
+
 add_executable(echo_standard_input echo_standard_input.cpp)
-target_link_libraries(echo_standard_input PRIVATE sio::sio)
+target_link_libraries(echo_standard_input PRIVATE sio::sio sio::sio_backend_stdexec)
 
 add_executable(tcp_echo_server tcp_echo_server.cpp)
-target_link_libraries(tcp_echo_server PRIVATE sio::sio)
+target_link_libraries(tcp_echo_server PRIVATE sio::sio sio::sio_backend_stdexec)
 
 add_executable(batched_reads batched_reads.cpp)
-target_link_libraries(batched_reads PRIVATE sio::sio)
+target_link_libraries(batched_reads PRIVATE sio::sio sio::sio_backend_stdexec)

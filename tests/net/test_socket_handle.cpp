@@ -1,50 +1,74 @@
 #include "sio/async_resource.hpp"
+#include "sio/event_loop/concepts.hpp"
 #include "sio/event_loop/socket_handle.hpp"
-#include "sio/event_loop/stdexec/backend.hpp"
 #include "sio/ip/tcp.hpp"
+#include "backend_matrix.hpp"
 
 #include <catch2/catch_all.hpp>
 
 #include <exec/finally.hpp>
 #include <exec/timed_scheduler.hpp>
-#include <exec/when_any.hpp>
 #include <stdexec/execution.hpp>
 
 #include <chrono>
+#include <string>
 
- using backend = sio::event_loop::stdexec_backend::backend;
-
-template <stdexec::sender Sender>
-void sync_wait(backend& context, Sender&& sender) {
-  stdexec::sync_wait(
-    exec::when_any(std::forward<Sender>(sender), context.run(exec::until::stopped)));
-}
+using namespace stdexec;
 
 TEST_CASE("socket_handle - Open a socket", "[socket_handle]") {
-  backend context{};
-  sio::event_loop::socket<backend, sio::ip::tcp> socket{&context, sio::ip::tcp::v4()};
+  sio::test::for_each_backend([]<class Backend>() {
+    if constexpr (!Backend::available) {
+      SUCCEED();
+      return;
+    }
 
-  sync_wait(
-    context,
-    stdexec::let_value(
-      socket.open(),
-      [](auto&& handle) {
-        CHECK(handle.protocol().type() == SOCK_STREAM);
-        return sio::async::close(handle);
-      }));
+    DYNAMIC_SECTION(std::string(Backend::name)) {
+      using loop_type = typename Backend::loop_type;
+      if constexpr (sio::event_loop::socket_loop_for<loop_type, sio::ip::tcp>) {
+        loop_type context{};
+        sio::event_loop::socket<loop_type, sio::ip::tcp> socket{&context, sio::ip::tcp::v4()};
+
+        Backend::sync_wait(
+          context,
+          let_value(
+            socket.open(),
+            [](auto&& handle) {
+              CHECK(handle.protocol().type() == SOCK_STREAM);
+              return sio::async::close(handle);
+            }));
+      } else {
+        SUCCEED();
+      }
+    }
+  });
 }
 
 TEST_CASE("acceptor_handle - Open and close", "[socket_handle][acceptor]") {
-  backend context{};
-  const sio::ip::endpoint endpoint{sio::ip::address_v4::loopback(), 4242};
+  sio::test::for_each_backend([]<class Backend>() {
+    if constexpr (!Backend::available) {
+      SUCCEED();
+      return;
+    }
 
-  sio::event_loop::acceptor<backend, sio::ip::tcp> acceptor{&context, sio::ip::tcp::v4(), endpoint};
+    DYNAMIC_SECTION(std::string(Backend::name)) {
+      using loop_type = typename Backend::loop_type;
+      if constexpr (sio::event_loop::socket_loop_for<loop_type, sio::ip::tcp>) {
+        loop_type context{};
+        const sio::ip::endpoint endpoint{sio::ip::address_v4::loopback(), 4242};
 
-  sync_wait(
-    context,
-    stdexec::let_value(
-      acceptor.open(),
-      [](auto handle) {
-        return handle.close();
-      }));
+        sio::event_loop::acceptor<loop_type, sio::ip::tcp> acceptor{
+          &context, sio::ip::tcp::v4(), endpoint};
+
+        Backend::sync_wait(
+          context,
+          let_value(
+            acceptor.open(),
+            [](auto handle) {
+              return handle.close();
+            }));
+      } else {
+        SUCCEED();
+      }
+    }
+  });
 }

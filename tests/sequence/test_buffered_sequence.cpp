@@ -15,20 +15,22 @@
  */
 
 #include "sio/buffer.hpp"
-#include "sio/event_loop/stdexec/fd_read.h"
-#include "sio/event_loop/stdexec/fd_write.h"
 #include "sio/mutable_buffer.hpp"
 #include "sio/sequence/buffered_sequence.hpp"
 #include "sio/sequence/ignore_all.hpp"
+#include "backend_matrix.hpp"
 
 #include <catch2/catch_all.hpp>
 
+#include <array>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <exec/linux/io_uring_context.hpp>
-#include <exec/when_any.hpp>
+#include <span>
+#include <string>
+
+#include <stdexec/execution.hpp>
 
 int create_memfd(std::string_view path) {
   int fd = memfd_create(path.data(), 0);
@@ -60,37 +62,51 @@ void write_to_file(int fd, std::string_view content) {
   REQUIRE(ret == content.size());
 }
 
-template <stdexec::sender Sender>
-void sync_wait(exec::io_uring_context& context, Sender&& sender) {
-  stdexec::sync_wait(exec::when_any(std::forward<Sender>(sender), context.run()));
-}
+TEMPLATE_TEST_CASE(
+  "buffered_sequence - with read_factory and single buffer",
+  "[sio][buffered_sequence]",
+  SIO_TEST_BACKEND_TYPES) {
+  using Backend = TestType;
+  if constexpr (!Backend::available) {
+    SUCCEED();
+    return;
+  }
 
-TEST_CASE("buffered_sequence - with read_factory and single buffer", "[sio][buffered_sequence]") {
-  auto ctx = exec::io_uring_context{};
+  CAPTURE(Backend::name);
+  typename Backend::loop_type loop{};
   auto fd = create_memfd("with_read_factory");
 
   constexpr auto content = std::string_view{"hello world"};
   write_to_file(fd, content);
-  auto factory = sio::event_loop::stdexec_backend::read_factory{&ctx, fd};
+  typename Backend::read_factory factory{&loop.native_context(), fd};
 
   // write to storage
   auto storage = std::string(content.size(), '0');
   auto buffer = sio::buffer(storage);
   auto buffered_read_some = sio::buffered_sequence(factory, buffer, 0);
-  ::sync_wait(ctx, sio::ignore_all(std::move(buffered_read_some)));
+  Backend::sync_wait(loop, sio::ignore_all(std::move(buffered_read_some)));
 
   CHECK(storage == content);
+  ::close(fd);
 }
 
-TEST_CASE(
+TEMPLATE_TEST_CASE(
   "buffered_sequence - with read_factory and multiple buffers",
-  "[sio][buffered_sequence]") {
-  auto ctx = exec::io_uring_context{};
+  "[sio][buffered_sequence]",
+  SIO_TEST_BACKEND_TYPES) {
+  using Backend = TestType;
+  if constexpr (!Backend::available) {
+    SUCCEED();
+    return;
+  }
+
+  CAPTURE(Backend::name);
+  typename Backend::loop_type loop{};
   auto fd = create_memfd("with_read_factory");
 
   constexpr auto content = std::string_view{"hello world"};
   write_to_file(fd, content);
-  auto factory = sio::event_loop::stdexec_backend::read_factory{&ctx, fd};
+  typename Backend::read_factory factory{&loop.native_context(), fd};
 
   // write to storage
   auto storage1 = std::string(6, '0');
@@ -98,22 +114,33 @@ TEST_CASE(
   auto array = std::array<sio::mutable_buffer, 2>{sio::buffer(storage1), sio::buffer(storage2)};
   auto buffers = std::span< sio::mutable_buffer>{array};
   auto buffered_read_some = sio::buffered_sequence(factory, buffers, 0);
-  ::sync_wait(ctx, sio::ignore_all(std::move(buffered_read_some)));
+  Backend::sync_wait(loop, sio::ignore_all(std::move(buffered_read_some)));
 
   CHECK(storage1 == "hello ");
   CHECK(storage2 == "world");
+  ::close(fd);
 }
 
-TEST_CASE("buffered_sequence - with write_factory and single buffer", "[sio][buffered_sequence]") {
-  auto ctx = exec::io_uring_context{};
-  auto fd = create_memfd("with_write_factory");
-  REQUIRE(fd != -1);
+TEMPLATE_TEST_CASE(
+  "buffered_sequence - with write_factory and single buffer",
+  "[sio][buffered_sequence]",
+  SIO_TEST_BACKEND_TYPES) {
+  using Backend = TestType;
+  if constexpr (!Backend::available) {
+    SUCCEED();
+    return;
+  }
 
-  auto factory = sio::event_loop::stdexec_backend::write_factory{&ctx, fd};
+  CAPTURE(Backend::name);
+  typename Backend::loop_type loop{};
+  auto fd = create_memfd("with_write_factory");
+
+  typename Backend::write_factory factory{&loop.native_context(), fd};
   const auto content = std::string{"hello world"};
   auto buffer = sio::buffer(content);
   auto buffered_write_some = sio::buffered_sequence(factory, buffer, 0);
-  ::sync_wait(ctx, sio::ignore_all(std::move(buffered_write_some)));
+  Backend::sync_wait(loop, sio::ignore_all(std::move(buffered_write_some)));
 
   CHECK(read_file(fd) == content);
+  ::close(fd);
 }

@@ -4,6 +4,24 @@ project(senders-io
   HOMEPAGE_URL "https://github.com/maikel/senders-io"
   LANGUAGES CXX)
 
+# Configure cmake
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(FetchStdexec)
+include(CMakeDependentOption)
+include(GNUInstallDirs)
+
+function(sio_install_backend target file_set)
+  if (CMAKE_SKIP_INSTALL_RULES)
+    return()
+  endif()
+
+  install(
+    TARGETS ${target}
+    EXPORT sio-targets
+    FILE_SET ${file_set} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+endfunction()
+
+# Setup build tools
 find_package(Doxygen)
 if (DOXYGEN_FOUND)
   set(DOXYGEN_GENERATE_HTML YES)
@@ -13,9 +31,19 @@ if (DOXYGEN_FOUND)
       ${CMAKE_CURRENT_SOURCE_DIR}/source
   )
 endif()
+
+# Setup project
 set(CMAKE_EXPORT_COMPILE_COMMANDS true)
+set(SIO_PLATFORM_LINUX OFF)
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(SIO_PLATFORM_LINUX ON)
+endif()
 
 option(SIO_FETCH_CONTENT "Use FetchContent to get dependencies" ON)
+option(BUILD_TESTING "Build tests" ${PROJECT_IS_TOP_LEVEL})
+option(SIO_EXAMPLES "Build examples" ${PROJECT_IS_TOP_LEVEL})
+option(SIO_ENABLE_BACKEND_STDEXEC "Enable stdexec-backed event loop integration" ON)
+cmake_dependent_option(SIO_ENABLE_BACKEND_IOURING "Enable io_uring-backed event loop integration" ON "SIO_PLATFORM_LINUX" OFF)
 
 if(SIO_FETCH_CONTENT)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -27,6 +55,7 @@ else()
   find_package(STDEXEC REQUIRED)
 endif()
 
+# Core lib
 add_library(sio
   source/sio/const_buffer_span.cpp
   source/sio/mutable_buffer_span.cpp
@@ -69,22 +98,6 @@ target_sources(sio PUBLIC
     source/sio/event_loop/concepts.hpp
     source/sio/event_loop/file_handle.hpp
     source/sio/event_loop/socket_handle.hpp
-    source/sio/event_loop/stdexec/backend.hpp
-    source/sio/event_loop/stdexec/details.h
-    source/sio/event_loop/stdexec/fd_close.h
-    source/sio/event_loop/stdexec/fd_read.h
-    source/sio/event_loop/stdexec/fd_write.h
-    source/sio/event_loop/stdexec/file_open.h
-    source/sio/event_loop/stdexec/socket_accept.h
-    source/sio/event_loop/stdexec/socket_connect.h
-    source/sio/event_loop/stdexec/socket_open.h
-    source/sio/event_loop/stdexec/socket_sendmsg.h
-    source/sio/event_loop/iouring/backend.hpp
-    source/sio/event_loop/iouring/context.hpp
-    source/sio/event_loop/iouring/details.hpp
-    source/sio/event_loop/iouring/operations.hpp
-    source/sio/event_loop/iouring/run_sender.hpp
-    source/sio/event_loop/iouring/scheduler.hpp
     source/sio/assert.hpp
     source/sio/async_allocator.hpp
     source/sio/async_channel.hpp
@@ -108,10 +121,56 @@ target_sources(sio PUBLIC
     source/sio/with_env.hpp)
 target_link_libraries(sio PUBLIC STDEXEC::stdexec)
 target_compile_features(sio PUBLIC cxx_std_20)
+install( TARGETS sio EXPORT sio-targets FILE_SET sio_headers DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-if(PROJECT_IS_TOP_LEVEL)
-  include(CTest)
+
+if (SIO_ENABLE_BACKEND_STDEXEC)
+  add_library(sio_backend_stdexec INTERFACE)
+  add_library(sio::sio_backend_stdexec ALIAS sio_backend_stdexec)
+  target_link_libraries(sio_backend_stdexec INTERFACE sio)
+  target_sources(sio_backend_stdexec
+    INTERFACE
+      FILE_SET stdexec_backend_headers
+      TYPE HEADERS
+      BASE_DIRS source
+      FILES
+        source/sio/event_loop/stdexec/backend.hpp
+        source/sio/event_loop/stdexec/details.h
+        source/sio/event_loop/stdexec/fd_close.h
+        source/sio/event_loop/stdexec/fd_read.h
+        source/sio/event_loop/stdexec/fd_write.h
+        source/sio/event_loop/stdexec/file_open.h
+        source/sio/event_loop/stdexec/socket_accept.h
+        source/sio/event_loop/stdexec/socket_connect.h
+        source/sio/event_loop/stdexec/socket_open.h
+        source/sio/event_loop/stdexec/socket_sendmsg.h)
+  sio_install_backend(sio_backend_stdexec stdexec_backend_headers)
 endif()
+
+if (SIO_ENABLE_BACKEND_IOURING)
+  find_package(liburing 2.5 REQUIRED)
+  add_library(sio_backend_iouring INTERFACE)
+  add_library(sio::sio_backend_iouring ALIAS sio_backend_iouring)
+  target_link_libraries(
+    sio_backend_iouring
+    INTERFACE
+      sio
+      liburing::liburing)
+  target_sources(sio_backend_iouring
+    INTERFACE
+      FILE_SET iouring_backend_headers
+      TYPE HEADERS
+      BASE_DIRS source
+      FILES
+        source/sio/event_loop/iouring/backend.hpp
+        source/sio/event_loop/iouring/context.hpp
+        source/sio/event_loop/iouring/details.hpp
+        source/sio/event_loop/iouring/operations.hpp
+        source/sio/event_loop/iouring/run_sender.hpp
+        source/sio/event_loop/iouring/scheduler.hpp)
+  sio_install_backend(sio_backend_iouring iouring_backend_headers)
+endif()
+
 if (BUILD_TESTING)
   if(SIO_FETCH_CONTENT)
     include(FetchCatch2)
@@ -119,33 +178,6 @@ if (BUILD_TESTING)
     find_package(Catch2 REQUIRED)
   endif()
   add_subdirectory(tests)
-endif()
-
-if (NOT CMAKE_SKIP_INSTALL_RULES)
-  include(GNUInstallDirs)
-
-  install(
-    TARGETS sio
-    EXPORT sio-targets
-    FILE_SET sio_headers DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
-  install(EXPORT sio-targets
-    FILE sio-targets.cmake
-    NAMESPACE sio::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sio)
-
-  install(
-    FILES cmake/sio-config.cmake
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/sio")
-
-  include(CPack)
-endif()
-
-
-if (PROJECT_IS_TOP_LEVEL)
-  option(SIO_EXAMPLES "Build examples" ON)
-else()
-  option(SIO_EXAMPLES "Build examples" OFF)
 endif()
 
 if (SIO_EXAMPLES)
