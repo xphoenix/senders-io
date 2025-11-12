@@ -42,11 +42,11 @@ namespace sio::event_loop {
     }
 
     auto close() const noexcept {
-      return context().close_socket(const_cast<state_type&>(state()));
+      return context().close(const_cast<state_type&>(state()));
     }
 
     auto connect(typename Protocol::endpoint endpoint) const {
-      return context().connect_socket(const_cast<state_type&>(state()), endpoint);
+      return context().connect(const_cast<state_type&>(state()), endpoint);
     }
 
     auto bind(typename Protocol::endpoint endpoint) const {

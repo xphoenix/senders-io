@@ -43,10 +43,10 @@ namespace sio::event_loop {
       acceptor_state_t<Loop, Protocol>& acceptor_state,
       typename Protocol::endpoint endpoint) {
       {
-        loop.close_socket(socket_state)
+        loop.close(socket_state)
       };
       {
-        loop.connect_socket(socket_state, endpoint)
+        loop.connect(socket_state, endpoint)
       };
       {
         loop.bind(socket_state, endpoint)

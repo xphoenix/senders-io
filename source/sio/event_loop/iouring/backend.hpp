@@ -188,63 +188,6 @@ namespace sio::event_loop::iouring {
     }
 
     template <class Protocol>
-    auto close_socket(socket_state<Protocol>& state) noexcept {
-      return close(static_cast<fd_state&>(state));
-    }
-
-    template <class Protocol>
-    auto connect_socket(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
-      return connect_sender<Protocol>{&state, endpoint};
-    }
-
-    template <class Protocol>
-    void bind(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
-      state.bind(endpoint);
-    }
-
-    template <class Protocol>
-    auto read_some(
-      socket_state<Protocol>& state,
-      typename socket_state<Protocol>::buffers_type buffers) {
-      return read_some(static_cast<fd_state&>(state), buffers);
-    }
-
-    template <class Protocol>
-    auto read_some(
-      socket_state<Protocol>& state,
-      typename socket_state<Protocol>::buffer_type buffer) {
-      return read_some(static_cast<fd_state&>(state), buffer);
-    }
-
-    template <class Protocol>
-    auto write_some(
-      socket_state<Protocol>& state,
-      typename socket_state<Protocol>::const_buffers_type buffers) {
-      return write_some(static_cast<fd_state&>(state), buffers);
-    }
-
-    template <class Protocol>
-    auto write_some(
-      socket_state<Protocol>& state,
-      typename socket_state<Protocol>::const_buffer_type buffer) {
-      return write_some(static_cast<fd_state&>(state), buffer);
-    }
-
-    template <class Protocol>
-    auto write(
-      socket_state<Protocol>& state,
-      typename socket_state<Protocol>::const_buffers_type buffers) {
-      return write(static_cast<fd_state&>(state), buffers);
-    }
-
-    template <class Protocol>
-    auto write(
-      socket_state<Protocol>& state,
-      typename socket_state<Protocol>::const_buffer_type buffer) {
-      return write(static_cast<fd_state&>(state), buffer);
-    }
-
-    template <class Protocol>
     auto open_acceptor(Protocol protocol, typename Protocol::endpoint endpoint) {
       return ::stdexec::then(
         open_socket(protocol), [this, endpoint](socket_state<Protocol> state) mutable {
@@ -267,6 +210,16 @@ namespace sio::event_loop::iouring {
           return acceptor_state<Protocol>{
             context_, state.native_handle(), std::move(proto), std::move(endpoint)};
         });
+    }
+
+    template <class Protocol>
+    auto connect(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
+      return connect_sender<Protocol>{&state, endpoint};
+    }
+
+    template <class Protocol>
+    void bind(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
+      state.bind(endpoint);
     }
 
     template <class Protocol>

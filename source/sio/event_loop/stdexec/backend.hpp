@@ -214,12 +214,7 @@ class backend {
   }
 
   template <class Protocol>
-  auto close_socket(socket_state<Protocol>& state) noexcept {
-    return close(static_cast<fd_state&>(state));
-  }
-
-  template <class Protocol>
-  auto connect_socket(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
+  auto connect(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
     return stdexec_backend::connect_sender<Protocol>{&state, endpoint};
   }
 
