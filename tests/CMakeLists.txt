@@ -39,6 +39,21 @@ function(sio_add_test_target target_name)
 endfunction()
 
 set(SIO_TEST_FILE_SOURCES
+  file/test_file_handle.cpp
+  file/test_read_batched.cpp
+)
+
+set(SIO_TEST_NET_SOURCES
+  net/test_async_accept.cpp
+  net/test_can_endpoint.cpp
+  # net/test_can_socket.cpp
+  net/test_address.cpp
+  net/test_endpoint.cpp
+  net/test_resolve.cpp
+  net/test_socket_handle.cpp
+)
+
+set(SIO_TEST_LIB_SOURCES
   sequence/test_first.cpp
   sequence/test_last.cpp
   sequence/test_fork.cpp
@@ -49,24 +64,14 @@ set(SIO_TEST_FILE_SOURCES
   sequence/test_zip.cpp
   sequence/test_finally.cpp
   sequence/test_buffered_sequence.cpp
+  # test_async_channel.cpp
   test_async_resource.cpp
   test_async_mutex.cpp
   test_const_buffer_subspan.cpp
-  test_file_handle.cpp
   test_memory_pool.cpp
-  test_read_batched.cpp
   test_tap.cpp
 )
 
-set(SIO_TEST_NET_SOURCES
-  test_async_accept.cpp
-  net/test_can_endpoint.cpp
-  # net/test_can_socket.cpp
-  net/test_address.cpp
-  net/test_endpoint.cpp
-  net/test_resolve.cpp
-  net/test_socket_handle.cpp
-)
-
 sio_add_test_target(sio_tests_file ${SIO_TEST_FILE_SOURCES})
+sio_add_test_target(sio_tests_lib ${SIO_TEST_LIB_SOURCES})
 sio_add_test_target(sio_tests_net ${SIO_TEST_NET_SOURCES})

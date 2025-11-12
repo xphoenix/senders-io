@@ -18,20 +18,24 @@ TEST_CASE("can - Create raw protocol", "[can]") {
 }
 
 TEST_CASE("can - Create socket and bind it", "[can]") {
-  sio::event_loop::stdexec::backend ioc{};
   using namespace sio;
-  sio::event_loop::socket<sio::event_loop::stdexec::backend, can::raw_protocol> sock{ioc};
-  auto use_socket = zip(async::use(sock), stdexec::just(::can_frame{})) //
-                  | let_value_each([](
-                                     sio::event_loop::socket_handle<sio::event_loop::stdexec::backend, can::raw_protocol> sock,
-                                     ::can_frame& frame) {
-                      sock.bind(can::endpoint{5});
-                      frame.can_id = ::htons(0x1234);
-                      frame.len = 1;
-                      frame.data[0] = 0x42;
-                      std::span buffer{&frame, 1};
-                      return async::write(sock, std::as_bytes(buffer));
-                    })
-                  | ignore_all();
+
+  sio::event_loop::stdexec_backend::backend ioc{};
+  sio::event_loop::socket<sio::event_loop::stdexec_backend::backend, can::raw_protocol> sock{ioc};
+  auto use_socket =
+    zip(async::use(sock), stdexec::just(::can_frame{})) //
+    | let_value_each(
+      [](
+        sio::event_loop::socket_handle<sio::event_loop::stdexec_backend::backend, can::raw_protocol> sock,
+        ::can_frame& frame) {
+        sock.bind(can::endpoint{5});
+        frame.can_id = ::htons(0x1234);
+        frame.len = 1;
+        frame.data[0] = 0x42;
+        std::span buffer{&frame, 1};
+        return async::write(sock, std::as_bytes(buffer));
+      })
+    | ignore_all();
+
   stdexec::sync_wait(exec::when_any(use_socket, ioc.run()));
 }

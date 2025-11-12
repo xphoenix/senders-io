@@ -1,22 +1,29 @@
 #pragma once
 
-#include "context.hpp"
+#include "scheduler.hpp"
 
 #include <stdexec/execution.hpp>
 
+#include <exception>
+#include <optional>
 #include <system_error>
 #include <utility>
 
 namespace sio::event_loop::iouring {
-  enum class run_mode {
-    stopped,
-    drained
-  };
-
   namespace detail {
     template <class Receiver>
     class run_operation {
+     private:
+      struct on_stop {
+        io_context& context;
+
+        void operator()() const noexcept {
+          context.request_stop();
+        }
+      };
+
      public:
+
       run_operation(io_context& ctx, run_mode mode, Receiver&& rcvr) noexcept
         : context_{ctx}
         , mode_{mode}
@@ -35,14 +42,34 @@ namespace sio::event_loop::iouring {
           return;
         }
 
+        using stop_token_type = decltype(stop_token);
+        using callback_type = stdexec::stop_callback_for_t<stop_token_type, on_stop>;
+        std::optional<callback_type> callback{
+          std::in_place,
+          stop_token,
+          on_stop{op.context_}
+        };
+
+        bool completed = false;
         try {
-          if (op.run_loop(stop_token)) {
-            stdexec::set_value(std::move(op.receiver_));
-          } else {
-            stdexec::set_stopped(std::move(op.receiver_));
-          }
+          completed = op.run_loop(stop_token);
         } catch (const std::system_error& err) {
-          stdexec::set_error(std::move(op.receiver_), err.code());
+          callback.reset();
+          stdexec::set_error(std::move(op.receiver_), std::make_exception_ptr(err));
+          return;
+        } catch (...) {
+          callback.reset();
+          stdexec::set_error(std::move(op.receiver_), std::current_exception());
+          return;
+        }
+
+        callback.reset();
+
+        if (!completed) {
+          op.context_.run_until_empty();
+          stdexec::set_stopped(std::move(op.receiver_));
+        } else {
+          stdexec::set_value(std::move(op.receiver_));
         }
       }
 
@@ -83,7 +110,7 @@ namespace sio::event_loop::iouring {
 
     using completion_signatures = stdexec::completion_signatures<
       stdexec::set_value_t(),
-      stdexec::set_error_t(std::error_code),
+      stdexec::set_error_t(std::exception_ptr),
       stdexec::set_stopped_t()>;
 
     template <stdexec::receiver Receiver>
@@ -91,8 +118,17 @@ namespace sio::event_loop::iouring {
       return detail::run_operation<Receiver>{*context_, mode_, static_cast<Receiver&&>(receiver)};
     }
 
-    friend auto tag_invoke(stdexec::get_env_t, const run_sender&) noexcept {
-      return stdexec::empty_env{};
+    struct run_env {
+      io_context* ctx;
+
+      auto query(stdexec::get_completion_scheduler_t<stdexec::set_value_t>) const noexcept
+        -> scheduler {
+        return ctx->get_scheduler();
+      }
+    };
+
+    friend auto tag_invoke(stdexec::get_env_t, const run_sender& sndr) noexcept {
+      return run_env{sndr.context_};
     }
   };
 

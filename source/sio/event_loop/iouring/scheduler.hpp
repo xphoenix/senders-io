@@ -30,6 +30,12 @@ namespace sio::event_loop::iouring {
 
     auto schedule() const noexcept;
 
+    friend scheduler tag_invoke(
+      stdexec::get_completion_scheduler_t<stdexec::set_value_t>,
+      scheduler sched) noexcept {
+      return sched;
+    }
+
    private:
     io_context* context_{nullptr};
   };
@@ -55,23 +61,15 @@ namespace sio::event_loop::iouring {
           return;
         }
 
-        try {
-          op.context.with_submission_queue([&](::io_uring_sqe& sqe) {
-            ::io_uring_prep_nop(&sqe);
-            op.context.register_completion(op, sqe);
-          });
-        } catch (const std::system_error& err) {
-          stdexec::set_error(std::move(op.receiver_), err.code());
-        }
+        op.context.with_submission_queue([&](::io_uring_sqe& sqe) {
+          ::io_uring_prep_nop(&sqe);
+          op.context.register_completion(op, sqe);
+        });
       }
 
       static void on_complete(completion_base* base, const ::io_uring_cqe& cqe) noexcept {
         auto& self = *static_cast<schedule_operation*>(base);
-        if (cqe.res < 0 && cqe.res != -ECANCELED) {
-          stdexec::set_error(
-            std::move(self.receiver_),
-            std::error_code(-cqe.res, std::system_category()));
-        } else if (self.cancelled.load(std::memory_order_acquire) || cqe.res == -ECANCELED) {
+        if (self.cancelled.load(std::memory_order_acquire) || cqe.res == -ECANCELED) {
           stdexec::set_stopped(std::move(self.receiver_));
         } else {
           stdexec::set_value(std::move(self.receiver_));
@@ -87,10 +85,18 @@ namespace sio::event_loop::iouring {
 
       io_context* context_{};
 
-      using completion_signatures = stdexec::completion_signatures<
-        stdexec::set_value_t(),
-        stdexec::set_error_t(std::error_code),
-        stdexec::set_stopped_t()>;
+    using completion_signatures = stdexec::completion_signatures<
+      stdexec::set_value_t(),
+      stdexec::set_stopped_t()>;
+
+      struct schedule_env {
+        scheduler sched;
+
+        auto query(stdexec::get_completion_scheduler_t<stdexec::set_value_t>) const noexcept
+          -> scheduler {
+          return sched;
+        }
+      };
 
       template <stdexec::receiver Receiver>
       auto connect(Receiver receiver) const {
@@ -98,7 +104,7 @@ namespace sio::event_loop::iouring {
       }
 
       friend auto tag_invoke(stdexec::get_env_t, const schedule_sender& sndr) noexcept {
-        return stdexec::empty_env{};
+        return schedule_env{scheduler{sndr.context_}};
       }
     };
   } // namespace detail

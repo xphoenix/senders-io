@@ -1,5 +1,6 @@
 #include <sio/read_batched.hpp>
 #include <sio/event_loop/file_handle.hpp>
+#include <sio/event_loop/concepts.hpp>
 #include <sio/sequence/fork.hpp>
 #include <sio/sequence/iterate.hpp>
 #include <sio/sequence/ignore_all.hpp>
@@ -9,6 +10,7 @@
 #include <catch2/catch_all.hpp>
 
 #include <exec/finally.hpp>
+#include <exec/when_any.hpp>
 #include <stdexec/execution.hpp>
 
 #include <filesystem>
@@ -22,10 +24,13 @@ using namespace sio;
 using namespace stdexec;
 using namespace sio::async;
 
-TEMPLATE_TEST_CASE("read_batched - Read from a file", "[read_batched]", SIO_TEST_BACKEND_TYPES) {
+TEMPLATE_LIST_TEST_CASE("read_batched - Read from a file", "[read_batched]", SIO_TEST_BACKEND_TYPES) {
   using Backend = TestType;
-  if constexpr (!Backend::available) {
-    SUCCEED();
+  CAPTURE(Backend::name);
+  using loop_type = typename Backend::loop_type;
+
+  if constexpr (!sio::event_loop::seekable_file_loop<loop_type>) {
+    SKIP("Backend does not support seekable file handles");
     return;
   }
 
@@ -47,17 +52,15 @@ TEMPLATE_TEST_CASE("read_batched - Read from a file", "[read_batched]", SIO_TEST
     out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
   }
 
-  CAPTURE(Backend::name);
-
-  typename Backend::loop_type loop{};
-  sio::event_loop::seekable_file<typename Backend::loop_type> resource{
+  loop_type loop{};
+  sio::event_loop::seekable_file resource{
     &loop,
     path,
     sio::async::mode::read,
     sio::async::creation::open_existing};
 
   int values[3] = {};
-  using handle_type = sio::event_loop::seekable_file_handle<typename Backend::loop_type>;
+  using handle_type = sio::event_loop::seekable_file_handle<loop_type>;
   using offset_type = sio::async::offset_type_of_t<handle_type>;
   offset_type offsets[3] = {0, 1024, 2048};
   sio::mutable_buffer bytes[3] = {
@@ -72,7 +75,7 @@ TEMPLATE_TEST_CASE("read_batched - Read from a file", "[read_batched]", SIO_TEST
            | exec::finally(handle.close());
     });
 
-  Backend::sync_wait(loop, std::move(sndr));
+  stdexec::sync_wait(exec::when_any(std::move(sndr), loop.run()));
 
   CHECK(values[0] == 42);
   CHECK(values[1] == 4242);

@@ -31,6 +31,9 @@
 #include <string>
 
 #include <stdexec/execution.hpp>
+#include <exec/when_any.hpp>
+
+using namespace stdexec;
 
 int create_memfd(std::string_view path) {
   int fd = memfd_create(path.data(), 0);
@@ -62,18 +65,14 @@ void write_to_file(int fd, std::string_view content) {
   REQUIRE(ret == content.size());
 }
 
-TEMPLATE_TEST_CASE(
+TEMPLATE_LIST_TEST_CASE(
   "buffered_sequence - with read_factory and single buffer",
   "[sio][buffered_sequence]",
   SIO_TEST_BACKEND_TYPES) {
   using Backend = TestType;
-  if constexpr (!Backend::available) {
-    SUCCEED();
-    return;
-  }
-
   CAPTURE(Backend::name);
-  typename Backend::loop_type loop{};
+  using loop_type = typename Backend::loop_type;
+  loop_type loop{};
   auto fd = create_memfd("with_read_factory");
 
   constexpr auto content = std::string_view{"hello world"};
@@ -84,24 +83,21 @@ TEMPLATE_TEST_CASE(
   auto storage = std::string(content.size(), '0');
   auto buffer = sio::buffer(storage);
   auto buffered_read_some = sio::buffered_sequence(factory, buffer, 0);
-  Backend::sync_wait(loop, sio::ignore_all(std::move(buffered_read_some)));
+  auto sender = sio::ignore_all(std::move(buffered_read_some));
+  stdexec::sync_wait(exec::when_any(std::move(sender), loop.run()));
 
   CHECK(storage == content);
   ::close(fd);
 }
 
-TEMPLATE_TEST_CASE(
+TEMPLATE_LIST_TEST_CASE(
   "buffered_sequence - with read_factory and multiple buffers",
   "[sio][buffered_sequence]",
   SIO_TEST_BACKEND_TYPES) {
   using Backend = TestType;
-  if constexpr (!Backend::available) {
-    SUCCEED();
-    return;
-  }
-
   CAPTURE(Backend::name);
-  typename Backend::loop_type loop{};
+  using loop_type = typename Backend::loop_type;
+  loop_type loop{};
   auto fd = create_memfd("with_read_factory");
 
   constexpr auto content = std::string_view{"hello world"};
@@ -114,32 +110,30 @@ TEMPLATE_TEST_CASE(
   auto array = std::array<sio::mutable_buffer, 2>{sio::buffer(storage1), sio::buffer(storage2)};
   auto buffers = std::span< sio::mutable_buffer>{array};
   auto buffered_read_some = sio::buffered_sequence(factory, buffers, 0);
-  Backend::sync_wait(loop, sio::ignore_all(std::move(buffered_read_some)));
+  auto sender = sio::ignore_all(std::move(buffered_read_some));
+  stdexec::sync_wait(exec::when_any(std::move(sender), loop.run()));
 
   CHECK(storage1 == "hello ");
   CHECK(storage2 == "world");
   ::close(fd);
 }
 
-TEMPLATE_TEST_CASE(
+TEMPLATE_LIST_TEST_CASE(
   "buffered_sequence - with write_factory and single buffer",
   "[sio][buffered_sequence]",
   SIO_TEST_BACKEND_TYPES) {
   using Backend = TestType;
-  if constexpr (!Backend::available) {
-    SUCCEED();
-    return;
-  }
-
   CAPTURE(Backend::name);
-  typename Backend::loop_type loop{};
+  using loop_type = typename Backend::loop_type;
+  loop_type loop{};
   auto fd = create_memfd("with_write_factory");
 
   typename Backend::write_factory factory{&loop.native_context(), fd};
   const auto content = std::string{"hello world"};
   auto buffer = sio::buffer(content);
   auto buffered_write_some = sio::buffered_sequence(factory, buffer, 0);
-  Backend::sync_wait(loop, sio::ignore_all(std::move(buffered_write_some)));
+  auto sender = sio::ignore_all(std::move(buffered_write_some));
+  stdexec::sync_wait(exec::when_any(std::move(sender), loop.run()));
 
   CHECK(read_file(fd) == content);
   ::close(fd);

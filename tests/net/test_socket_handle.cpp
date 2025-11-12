@@ -7,68 +7,45 @@
 #include <catch2/catch_all.hpp>
 
 #include <exec/finally.hpp>
-#include <exec/timed_scheduler.hpp>
+#include <exec/when_any.hpp>
 #include <stdexec/execution.hpp>
-
-#include <chrono>
-#include <string>
 
 using namespace stdexec;
 
-TEST_CASE("socket_handle - Open a socket", "[socket_handle]") {
-  sio::test::for_each_backend([]<class Backend>() {
-    if constexpr (!Backend::available) {
-      SUCCEED();
-      return;
-    }
+TEMPLATE_LIST_TEST_CASE("socket_handle - Open a socket", "[socket_handle]", SIO_TEST_BACKEND_TYPES) {
+  using Backend = TestType;
+  using loop_type = typename Backend::loop_type;
 
-    DYNAMIC_SECTION(std::string(Backend::name)) {
-      using loop_type = typename Backend::loop_type;
-      if constexpr (sio::event_loop::socket_loop_for<loop_type, sio::ip::tcp>) {
-        loop_type context{};
-        sio::event_loop::socket<loop_type, sio::ip::tcp> socket{&context, sio::ip::tcp::v4()};
+  CAPTURE(Backend::name);
+  if constexpr (!sio::event_loop::socket_loop_for<loop_type, sio::ip::tcp>) {
+    SKIP("Backend does not support sio::ip::tcp sockets");
+    return;
+  }
 
-        Backend::sync_wait(
-          context,
-          let_value(
-            socket.open(),
-            [](auto&& handle) {
-              CHECK(handle.protocol().type() == SOCK_STREAM);
-              return sio::async::close(handle);
-            }));
-      } else {
-        SUCCEED();
-      }
-    }
+  loop_type context{};
+  sio::event_loop::socket socket{&context, sio::ip::tcp::v4()};
+
+  auto sender = let_value(socket.open(), [](auto&& handle) {
+    CHECK(handle.protocol().type() == SOCK_STREAM);
+    return sio::async::close(handle);
   });
+  stdexec::sync_wait(exec::when_any(std::move(sender), context.run()));
 }
 
-TEST_CASE("acceptor_handle - Open and close", "[socket_handle][acceptor]") {
-  sio::test::for_each_backend([]<class Backend>() {
-    if constexpr (!Backend::available) {
-      SUCCEED();
-      return;
-    }
+TEMPLATE_LIST_TEST_CASE("acceptor_handle - Open and close", "[socket_handle][acceptor]", SIO_TEST_BACKEND_TYPES) {
+  using Backend = TestType;
+  using loop_type = typename Backend::loop_type;
 
-    DYNAMIC_SECTION(std::string(Backend::name)) {
-      using loop_type = typename Backend::loop_type;
-      if constexpr (sio::event_loop::socket_loop_for<loop_type, sio::ip::tcp>) {
-        loop_type context{};
-        const sio::ip::endpoint endpoint{sio::ip::address_v4::loopback(), 4242};
+  CAPTURE(Backend::name);
+  if constexpr (!sio::event_loop::socket_loop_for<loop_type, sio::ip::tcp>) {
+    SKIP("Backend does not support sio::ip::tcp sockets");
+    return;
+  }
 
-        sio::event_loop::acceptor<loop_type, sio::ip::tcp> acceptor{
-          &context, sio::ip::tcp::v4(), endpoint};
+  loop_type context{};
+  const sio::ip::endpoint endpoint{sio::ip::address_v4::loopback(), 4242};
+  sio::event_loop::acceptor acceptor{&context, sio::ip::tcp::v4(), endpoint};
 
-        Backend::sync_wait(
-          context,
-          let_value(
-            acceptor.open(),
-            [](auto handle) {
-              return handle.close();
-            }));
-      } else {
-        SUCCEED();
-      }
-    }
-  });
+  auto sender = let_value(acceptor.open(), [](auto handle) { return handle.close(); });
+  stdexec::sync_wait(exec::when_any(std::move(sender), context.run()));
 }

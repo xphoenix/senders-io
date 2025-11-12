@@ -25,6 +25,7 @@
 #include <exec/variant_sender.hpp>
 #include <exec/sequence_senders.hpp>
 #include <exec/__detail/__basic_sequence.hpp>
+#include <iostream>
 #include <stdexec/__detail/__concepts.hpp>
 #include <stdexec/__detail/__meta.hpp>
 
@@ -60,6 +61,10 @@ namespace sio {
 
       explicit operation_base(SeqRcvr rcvr) noexcept
         : next_rcvr_{static_cast<SeqRcvr&&>(rcvr)} {
+      }
+
+      ~operation_base() {
+        std::cout << "[" << this << "] operation_base is dead" << std::endl;
       }
 
       SeqRcvr next_rcvr_;
@@ -227,6 +232,11 @@ namespace sio {
         , inner_operations_{
             exec::set_next(base->next_rcvr_, static_cast<Item&&>(item)),
             item_receiver_t{this}} {
+        std::cout << "[" << this << "] item_operation created" << std::endl;
+      }
+
+      ~item_operation() {
+        std::cout << "[" << this << "] item_operation destroyed" << std::endl;
       }
 
       using next_sender_t = exec::next_sender_of_t<SeqRcvr, Item>;
@@ -237,9 +247,10 @@ namespace sio {
 
       union inner_operations_t {
         explicit inner_operations_t(next_sender_t&& next, item_receiver_t rcvr)
-          : next_(stdexec::connect(
-              static_cast<next_sender_t&&>(next),
-              static_cast<item_receiver_t&&>(rcvr))) {
+          : next_(
+              stdexec::connect(
+                static_cast<next_sender_t&&>(next),
+                static_cast<item_receiver_t&&>(rcvr))) {
         }
 
         ~inner_operations_t() {
@@ -278,13 +289,17 @@ namespace sio {
 
     template <class Item, class SeqRcvr, class ErrorsVariant>
     void item_receiver<Item, SeqRcvr, ErrorsVariant>::set_value() noexcept {
+      std::cout << "[" << this << "] item_receiver: set_value#begin" << std::endl;
       item_op_->start_delete_operation();
+      std::cout << "[" << this << "] item_receiver: set_value#end" << std::endl;
     }
 
     template <class Item, class SeqRcvr, class ErrorsVariant>
     void item_receiver<Item, SeqRcvr, ErrorsVariant>::set_stopped() noexcept {
+      std::cout << "[" << this << "] item_receiver: set_stopped#begin" << std::endl;
       item_op_->sequence_op_->request_stop();
       item_op_->start_delete_operation();
+      std::cout << "[" << this << "] item_receiver: set_stopped#end" << std::endl;
     }
 
     template <class Item, class SeqRcvr, class ErrorsVariant>
@@ -299,6 +314,10 @@ namespace sio {
       using receiver_concept = stdexec::receiver_t;
 
       operation_base<SeqRcvr, ErrorsVariant>* op_;
+
+      ~receiver() {
+        std::cout << "[" << this << "] fork::receiver is dead" << std::endl;
+      }
 
       template <class Item>
       auto set_next(Item&& item) {
@@ -319,13 +338,14 @@ namespace sio {
                         });
                })
              | stdexec::upon_stopped([op = op_]() noexcept {
+                 std::cout << "set_next#upon_stopped called" << std::endl;
                  op->request_stop();
-                 op->decrease_ref();
+                 // op->decrease_ref();
                })
              | stdexec::upon_error([op = op_]<class Err>(Err&& err) noexcept {
                  op->set_error(static_cast<Err&&>(err));
                  op->request_stop();
-                 op->decrease_ref();
+                 // op->decrease_ref();
                });
       }
 

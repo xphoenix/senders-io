@@ -311,3 +311,27 @@ namespace sio::event_loop {
     using state_type = seekable_file_state_t<loop_type>;
   };
 } // namespace sio::event_loop
+
+namespace sio::event_loop {
+
+  template <class Loop, class... Args>
+    requires file_loop<std::remove_reference_t<Loop>>
+  file(Loop& context, Args&&...)
+    -> file<std::remove_reference_t<Loop>>;
+
+  template <class Loop, class... Args>
+    requires file_loop<std::remove_reference_t<Loop>>
+  file(Loop* context, Args&&...)
+    -> file<std::remove_reference_t<Loop>>;
+
+  template <class Loop, class... Args>
+    requires seekable_file_loop<std::remove_reference_t<Loop>>
+  seekable_file(Loop& context, Args&&...)
+    -> seekable_file<std::remove_reference_t<Loop>>;
+
+  template <class Loop, class... Args>
+    requires seekable_file_loop<std::remove_reference_t<Loop>>
+  seekable_file(Loop* context, Args&&...)
+    -> seekable_file<std::remove_reference_t<Loop>>;
+
+} // namespace sio::event_loop

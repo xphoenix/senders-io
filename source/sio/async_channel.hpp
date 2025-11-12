@@ -193,11 +193,11 @@ namespace sio {
     }
 
     template <class Completions, class Receiver>
-      template <class Sender>
-      exec::next_sender_of_t<Receiver, Sender>
-        wrap_receiver<Completions, Receiver>::set_next(Sender&& sndr) {
-        return exec::set_next(op_->rcvr_, std::forward<Sender>(sndr));
-      }
+    template <class Sender>
+    exec::next_sender_of_t<Receiver, Sender>
+      wrap_receiver<Completions, Receiver>::set_next(Sender&& sndr) {
+      return exec::set_next(op_->rcvr_, std::forward<Sender>(sndr));
+    }
 
     template <class Completions, class Receiver>
     void wrap_receiver<Completions, Receiver>::set_value(stdexec::set_value_t) && noexcept {
@@ -218,6 +218,8 @@ namespace sio {
     struct subscribe_sequence {
       using sender_concept = exec::sequence_sender_t;
       using completion_signatures = stdexec::completion_signatures<stdexec::set_value_t()>;
+      using item_sender = typename any_sequence_receiver_ref<Completions>::template any_sender<>;
+      using item_types = exec::item_types<item_sender>;
 
       template <stdexec::receiver Receiver>
       auto subscribe(Receiver rcvr) const noexcept -> subscribe_operation<Completions, Receiver> {

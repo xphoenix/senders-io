@@ -10,11 +10,15 @@
 #include <cstdint>
 #include <mutex>
 #include <system_error>
+#include <iostream>
 
 namespace sio::event_loop::iouring {
   class scheduler;
   struct completion_base;
-  enum class run_mode;
+  enum class run_mode {
+    stopped,
+    drained
+  };
   struct run_sender;
 
   class io_context {
@@ -167,6 +171,8 @@ namespace sio::event_loop::iouring {
   inline void io_context::dispatch(const ::io_uring_cqe& cqe) noexcept {
     auto* base = static_cast<completion_base*>(
       reinterpret_cast<void*>(::io_uring_cqe_get_data64(&cqe)));
+
+    std::cout << "dispatch: " << base << std::endl;
     if (base != nullptr) {
       base->complete(cqe);
     }
@@ -183,6 +189,12 @@ namespace sio::event_loop::iouring {
   inline void io_context::run_until_empty() {
     while (run_some() != 0) {
       continue;
+    }
+  }
+
+  inline void completion_base::request_cancel() noexcept {
+    if (!cancelled.exchange(true, std::memory_order_acq_rel)) {
+      context.cancel(*this);
     }
   }
 } // namespace sio::event_loop::iouring

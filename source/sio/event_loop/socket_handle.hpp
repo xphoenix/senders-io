@@ -209,4 +209,30 @@ namespace sio::event_loop {
     }
   };
 
+  template <class Loop, class Protocol>
+    requires socket_loop_for<std::remove_reference_t<Loop>, std::remove_cvref_t<Protocol>>
+  socket(Loop& context, Protocol protocol)
+    -> socket<std::remove_reference_t<Loop>, std::remove_cvref_t<Protocol>>;
+
+  template <class Loop, class Protocol>
+    requires socket_loop_for<std::remove_reference_t<Loop>, std::remove_cvref_t<Protocol>>
+  socket(Loop* context, Protocol protocol)
+    -> socket<std::remove_reference_t<Loop>, std::remove_cvref_t<Protocol>>;
+
+  template <class Loop, class Protocol>
+    requires socket_loop_for<std::remove_reference_t<Loop>, std::remove_cvref_t<Protocol>>
+  acceptor(
+    Loop& context,
+    Protocol protocol,
+    typename std::remove_cvref_t<Protocol>::endpoint endpoint)
+    -> acceptor<std::remove_reference_t<Loop>, std::remove_cvref_t<Protocol>>;
+
+  template <class Loop, class Protocol>
+    requires socket_loop_for<std::remove_reference_t<Loop>, std::remove_cvref_t<Protocol>>
+  acceptor(
+    Loop* context,
+    Protocol protocol,
+    typename std::remove_cvref_t<Protocol>::endpoint endpoint)
+    -> acceptor<std::remove_reference_t<Loop>, std::remove_cvref_t<Protocol>>;
+
 } // namespace sio::event_loop

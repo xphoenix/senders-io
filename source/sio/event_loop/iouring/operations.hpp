@@ -15,6 +15,7 @@
 #include <system_error>
 #include <type_traits>
 #include <utility>
+#include <iostream>
 
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -23,10 +24,11 @@
 
 namespace sio::event_loop::iouring {
   struct env {
-    scheduler scheduler;
+    scheduler loop_scheduler_;
 
-    auto query(stdexec::get_completion_scheduler_t<stdexec::set_value_t>) const noexcept -> scheduler {
-      return scheduler;
+    auto query(stdexec::get_completion_scheduler_t<stdexec::set_value_t>) const noexcept
+      -> scheduler {
+      return loop_scheduler_;
     }
   };
 
@@ -132,7 +134,8 @@ namespace sio::event_loop::iouring {
         });
       } catch (const std::system_error& err) {
         self.reset_stop_callback();
-        stdexec::set_error(std::move(self).receiver(), err.code());
+        auto ec = err.code();
+        stdexec::set_error(std::move(self).receiver(), std::move(ec));
       }
     }
 
@@ -179,9 +182,8 @@ namespace sio::event_loop::iouring {
       if (cqe.res == 0) {
         stdexec::set_value(std::move(*this).receiver());
       } else {
-        stdexec::set_error(
-          std::move(*this).receiver(),
-          std::error_code(-cqe.res, std::system_category()));
+        auto ec = std::error_code(-cqe.res, std::system_category());
+        stdexec::set_error(std::move(*this).receiver(), std::move(ec));
       }
     }
   };
@@ -261,11 +263,10 @@ namespace sio::event_loop::iouring {
       auto data,
       int fd,
       ::off_t offset,
-      Receiver&& rcvr) noexcept(
-        std::is_nothrow_move_constructible_v<Receiver>)
-      : submission_operation<read_operation_base<Submission, Receiver>, Receiver>{
-          ctx,
-          static_cast<Receiver&&>(rcvr)}
+      Receiver&& rcvr) noexcept(std::is_nothrow_move_constructible_v<Receiver>)
+      : submission_operation<
+          read_operation_base<Submission, Receiver>,
+          Receiver>{ctx, static_cast<Receiver&&>(rcvr)}
       , Submission{data, fd, offset} {
     }
 
@@ -279,13 +280,10 @@ namespace sio::event_loop::iouring {
         return;
       }
       if (cqe.res >= 0) {
-        stdexec::set_value(
-          std::move(*this).receiver(),
-          static_cast<std::size_t>(cqe.res));
+        stdexec::set_value(std::move(*this).receiver(), static_cast<std::size_t>(cqe.res));
       } else {
-        stdexec::set_error(
-          std::move(*this).receiver(),
-          std::error_code(-cqe.res, std::system_category()));
+        auto ec = std::error_code(-cqe.res, std::system_category());
+        stdexec::set_error(std::move(*this).receiver(), std::move(ec));
       }
     }
   };
@@ -309,7 +307,11 @@ namespace sio::event_loop::iouring {
     int fd_{};
     ::off_t offset_{};
 
-    read_sender(io_context& ctx, sio::mutable_buffer_span buffers, int fd, ::off_t offset = 0) noexcept
+    read_sender(
+      io_context& ctx,
+      sio::mutable_buffer_span buffers,
+      int fd,
+      ::off_t offset = 0) noexcept
       : context_{&ctx}
       , buffers_{buffers}
       , fd_{fd}
@@ -319,11 +321,7 @@ namespace sio::event_loop::iouring {
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return read_operation<Receiver>{
-        *context_,
-        buffers_,
-        fd_,
-        offset_,
-        static_cast<Receiver&&>(receiver)};
+        *context_, buffers_, fd_, offset_, static_cast<Receiver&&>(receiver)};
     }
 
     env get_env() const noexcept {
@@ -358,11 +356,7 @@ namespace sio::event_loop::iouring {
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return read_operation_single<Receiver>{
-        *context_,
-        buffer_,
-        fd_,
-        offset_,
-        static_cast<Receiver&&>(receiver)};
+        *context_, buffer_, fd_, offset_, static_cast<Receiver&&>(receiver)};
     }
 
     env get_env() const noexcept {
@@ -424,11 +418,10 @@ namespace sio::event_loop::iouring {
       auto data,
       int fd,
       ::off_t offset,
-      Receiver&& rcvr) noexcept(
-        std::is_nothrow_move_constructible_v<Receiver>)
-      : submission_operation<write_operation_base<Submission, Receiver>, Receiver>{
-          ctx,
-          static_cast<Receiver&&>(rcvr)}
+      Receiver&& rcvr) noexcept(std::is_nothrow_move_constructible_v<Receiver>)
+      : submission_operation<
+          write_operation_base<Submission, Receiver>,
+          Receiver>{ctx, static_cast<Receiver&&>(rcvr)}
       , Submission{data, fd, offset} {
     }
 
@@ -442,13 +435,10 @@ namespace sio::event_loop::iouring {
         return;
       }
       if (cqe.res >= 0) {
-        stdexec::set_value(
-          std::move(*this).receiver(),
-          static_cast<std::size_t>(cqe.res));
+        stdexec::set_value(std::move(*this).receiver(), static_cast<std::size_t>(cqe.res));
       } else {
-        stdexec::set_error(
-          std::move(*this).receiver(),
-          std::error_code(-cqe.res, std::system_category()));
+        auto ec = std::error_code(-cqe.res, std::system_category());
+        stdexec::set_error(std::move(*this).receiver(), std::move(ec));
       }
     }
   };
@@ -486,11 +476,7 @@ namespace sio::event_loop::iouring {
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return write_operation<Receiver>{
-        *context_,
-        buffers_,
-        fd_,
-        offset_,
-        static_cast<Receiver&&>(receiver)};
+        *context_, buffers_, fd_, offset_, static_cast<Receiver&&>(receiver)};
     }
 
     env get_env() const noexcept {
@@ -525,11 +511,7 @@ namespace sio::event_loop::iouring {
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return write_operation_single<Receiver>{
-        *context_,
-        buffer_,
-        fd_,
-        offset_,
-        static_cast<Receiver&&>(receiver)};
+        *context_, buffer_, fd_, offset_, static_cast<Receiver&&>(receiver)};
     }
 
     env get_env() const noexcept {
@@ -600,9 +582,9 @@ namespace sio::event_loop::iouring {
       async::creation creation,
       async::caching caching,
       Receiver&& rcvr)
-      : submission_operation<file_open_operation_base<Receiver, State>, Receiver>{
-          ctx,
-          static_cast<Receiver&&>(rcvr)}
+      : submission_operation<
+          file_open_operation_base<Receiver, State>,
+          Receiver>{ctx, static_cast<Receiver&&>(rcvr)}
       , open_submission{static_cast<open_data&&>(data)}
       , mode_{mode}
       , creation_{creation}
@@ -619,17 +601,11 @@ namespace sio::event_loop::iouring {
         return;
       }
       if (cqe.res >= 0) {
-        State state{
-          this->context,
-          cqe.res,
-          mode_,
-          creation_,
-          caching_};
+        State state{this->context, cqe.res, mode_, creation_, caching_};
         stdexec::set_value(std::move(*this).receiver(), std::move(state));
       } else {
-        stdexec::set_error(
-          std::move(*this).receiver(),
-          std::error_code(-cqe.res, std::system_category()));
+        auto ec = std::error_code(-cqe.res, std::system_category());
+        stdexec::set_error(std::move(*this).receiver(), std::move(ec));
       }
     }
 
@@ -673,12 +649,7 @@ namespace sio::event_loop::iouring {
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return file_open_operation<Receiver, State>{
-        open_data{data_},
-        *context_,
-        mode_,
-        creation_,
-        caching_,
-        static_cast<Receiver&&>(receiver)};
+        open_data{data_}, *context_, mode_, creation_, caching_, static_cast<Receiver&&>(receiver)};
     }
 
     env get_env() const noexcept {
@@ -710,9 +681,8 @@ namespace sio::event_loop::iouring {
 
       int fd = ::socket(op.protocol_.family(), op.protocol_.type(), op.protocol_.protocol());
       if (fd == -1) {
-        stdexec::set_error(
-          std::move(op.receiver_),
-          std::error_code(errno, std::system_category()));
+        auto ec = std::error_code(errno, std::system_category());
+        stdexec::set_error(std::move(op.receiver_), std::move(ec));
       } else {
         stdexec::set_value(
           std::move(op.receiver_),
@@ -741,9 +711,7 @@ namespace sio::event_loop::iouring {
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return open_operation<Protocol, Receiver>{
-        *context_,
-        protocol_,
-        static_cast<Receiver&&>(receiver)};
+        *context_, protocol_, static_cast<Receiver&&>(receiver)};
     }
 
     env get_env() const noexcept {
@@ -758,11 +726,10 @@ namespace sio::event_loop::iouring {
     connect_operation(
       socket_state<Protocol>& state,
       typename Protocol::endpoint peer_endpoint,
-      Receiver&& rcvr) noexcept(
-        std::is_nothrow_move_constructible_v<Receiver>)
-      : submission_operation<connect_operation<Protocol, Receiver>, Receiver>{
-          state.context(),
-          static_cast<Receiver&&>(rcvr)}
+      Receiver&& rcvr) noexcept(std::is_nothrow_move_constructible_v<Receiver>)
+      : submission_operation<
+          connect_operation<Protocol, Receiver>,
+          Receiver>{state.context(), static_cast<Receiver&&>(rcvr)}
       , state_{&state}
       , peer_endpoint_{peer_endpoint} {
     }
@@ -784,9 +751,8 @@ namespace sio::event_loop::iouring {
       if (cqe.res == 0) {
         stdexec::set_value(std::move(*this).receiver());
       } else {
-        stdexec::set_error(
-          std::move(*this).receiver(),
-          std::error_code(-cqe.res, std::system_category()));
+        auto ec = std::error_code(-cqe.res, std::system_category());
+        stdexec::set_error(std::move(*this).receiver(), std::move(ec));
       }
     }
 
@@ -810,9 +776,7 @@ namespace sio::event_loop::iouring {
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return connect_operation<Protocol, Receiver>{
-        *state_,
-        peer_endpoint_,
-        static_cast<Receiver&&>(receiver)};
+        *state_, peer_endpoint_, static_cast<Receiver&&>(receiver)};
     }
 
     env get_env() const noexcept {
@@ -824,13 +788,11 @@ namespace sio::event_loop::iouring {
   class sendmsg_operation
     : public submission_operation<sendmsg_operation<Protocol, Receiver>, Receiver> {
    public:
-    sendmsg_operation(
-      socket_state<Protocol>& state,
-      Receiver&& rcvr,
-      ::msghdr msg) noexcept(std::is_nothrow_move_constructible_v<Receiver>)
-      : submission_operation<sendmsg_operation<Protocol, Receiver>, Receiver>{
-          state.context(),
-          static_cast<Receiver&&>(rcvr)}
+    sendmsg_operation(socket_state<Protocol>& state, Receiver&& rcvr, ::msghdr msg) noexcept(
+      std::is_nothrow_move_constructible_v<Receiver>)
+      : submission_operation<
+          sendmsg_operation<Protocol, Receiver>,
+          Receiver>{state.context(), static_cast<Receiver&&>(rcvr)}
       , state_{&state}
       , msg_{msg} {
     }
@@ -849,13 +811,10 @@ namespace sio::event_loop::iouring {
         return;
       }
       if (cqe.res >= 0) {
-        stdexec::set_value(
-          std::move(*this).receiver(),
-          static_cast<std::size_t>(cqe.res));
+        stdexec::set_value(std::move(*this).receiver(), static_cast<std::size_t>(cqe.res));
       } else {
-        stdexec::set_error(
-          std::move(*this).receiver(),
-          std::error_code(-cqe.res, std::system_category()));
+        auto ec = std::error_code(-cqe.res, std::system_category());
+        stdexec::set_error(std::move(*this).receiver(), std::move(ec));
       }
     }
 
@@ -879,9 +838,7 @@ namespace sio::event_loop::iouring {
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return sendmsg_operation<Protocol, Receiver>{
-        *state_,
-        static_cast<Receiver&&>(receiver),
-        msg_};
+        *state_, static_cast<Receiver&&>(receiver), msg_};
     }
 
     env get_env() const noexcept {
@@ -895,11 +852,16 @@ namespace sio::event_loop::iouring {
    public:
     accept_operation(acceptor_state<Protocol>& state, Receiver&& rcvr) noexcept(
       std::is_nothrow_move_constructible_v<Receiver>)
-      : submission_operation<accept_operation<Protocol, Receiver>, Receiver>{
-          state.context(),
-          static_cast<Receiver&&>(rcvr)}
+      : submission_operation<
+          accept_operation<Protocol, Receiver>,
+          Receiver>{state.context(), static_cast<Receiver&&>(rcvr)}
       , state_{&state}
-      , addrlen_{state.local_endpoint().size()} {
+      , addrlen_{static_cast<socklen_t>(state.local_endpoint().size())} {
+      std::cout << "[" << this << "] accept created" << std::endl;
+    }
+
+    ~accept_operation() {
+      std::cout << "[" << this << "] accept destroyed" << std::endl;
     }
 
     void prepare_submission(::io_uring_sqe& sqe) noexcept {
@@ -909,23 +871,21 @@ namespace sio::event_loop::iouring {
       sqe_.addr = std::bit_cast<__u64>(state_->local_endpoint().data());
       sqe_.addr2 = std::bit_cast<__u64>(&addrlen_);
       sqe = sqe_;
+      std::cout << "[" << this << "] Submit accept" << std::endl;
     }
 
     void on_completion(const ::io_uring_cqe& cqe) noexcept {
       if (this->cancelled.load(std::memory_order_acquire) || cqe.res == -ECANCELED) {
+        std::cout << "[" << this << "] accept stopped" << std::endl;
         stdexec::set_stopped(std::move(*this).receiver());
-        return;
-      }
-      if (cqe.res >= 0) {
-        socket_state<Protocol> state{
-          state_->context(),
-          cqe.res,
-          state_->protocol()};
+      } else if (cqe.res >= 0) {
+        std::cout << "[" << this << "] accept successed" << std::endl;
+        socket_state<Protocol> state{state_->context(), cqe.res, state_->protocol()};
         stdexec::set_value(std::move(*this).receiver(), std::move(state));
       } else {
-        stdexec::set_error(
-          std::move(*this).receiver(),
-          std::error_code(-cqe.res, std::system_category()));
+        std::cout << "[" << this << "] accept error" << std::endl;
+        auto ec = std::error_code(-cqe.res, std::system_category());
+        stdexec::set_error(std::move(*this).receiver(), std::move(ec));
       }
     }
 
@@ -947,14 +907,12 @@ namespace sio::event_loop::iouring {
 
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
-      return accept_operation<Protocol, Receiver>{
-        *state_,
-        static_cast<Receiver&&>(receiver)};
+      return accept_operation<Protocol, Receiver>{*state_, static_cast<Receiver&&>(receiver)};
     }
 
-    env get_env() const noexcept {
-      return {state_->context().get_scheduler()};
-    }
+    // env get_env() const noexcept {
+    //   return {state_->context().get_scheduler()};
+    // }
   };
 
   template <class Protocol>

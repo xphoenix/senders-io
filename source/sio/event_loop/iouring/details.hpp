@@ -47,12 +47,6 @@ namespace sio::event_loop::iouring {
     std::atomic<bool> cancelled{false};
   };
 
-  inline void completion_base::request_cancel() noexcept {
-    if (!cancelled.exchange(true, std::memory_order_acq_rel)) {
-      context.cancel(*this);
-    }
-  }
-
   struct env;
 
   namespace buffered_sequence_ {
