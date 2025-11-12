@@ -1,14 +1,22 @@
-#include <sio/can/raw_protocol.hpp>
-#include <sio/async_resource.hpp>
-#include <sio/event_loop/socket_handle.hpp>
-#include <sio/event_loop/stdexec/backend.hpp>
+#include "backend_matrix.hpp"
 
-#include <sio/sequence/let_value_each.hpp>
-#include <sio/sequence/ignore_all.hpp>
-#include <sio/sequence/zip.hpp>
-#include <exec/when_any.hpp>
+#include "sio/async_resource.hpp"
+#include "sio/can/raw_protocol.hpp"
+#include "sio/event_loop/socket_handle.hpp"
+
+#include "sio/sequence/ignore_all.hpp"
+#include "sio/sequence/let_value_each.hpp"
+#include "sio/sequence/zip.hpp"
 
 #include <catch2/catch_all.hpp>
+#include <exec/when_any.hpp>
+#include <stdexec/execution.hpp>
+
+#include <span>
+#include <arpa/inet.h>
+
+using namespace sio;
+using namespace stdexec;
 
 TEST_CASE("can - Create raw protocol", "[can]") {
   sio::can::raw_protocol protocol{};
@@ -17,25 +25,28 @@ TEST_CASE("can - Create raw protocol", "[can]") {
   CHECK(protocol.family() == PF_CAN);
 }
 
-TEST_CASE("can - Create socket and bind it", "[can]") {
-  using namespace sio;
+TEMPLATE_LIST_TEST_CASE("can - Create socket and bind it", "[can]", SIO_TEST_BACKEND_TYPES) {
+  using Backend = TestType;
+  using loop_type = typename Backend::loop_type;
 
-  sio::event_loop::stdexec_backend::backend ioc{};
-  sio::event_loop::socket<sio::event_loop::stdexec_backend::backend, can::raw_protocol> sock{ioc};
-  auto use_socket =
-    zip(async::use(sock), stdexec::just(::can_frame{})) //
-    | let_value_each(
-      [](
-        sio::event_loop::socket_handle<sio::event_loop::stdexec_backend::backend, can::raw_protocol> sock,
-        ::can_frame& frame) {
-        sock.bind(can::endpoint{5});
-        frame.can_id = ::htons(0x1234);
-        frame.len = 1;
-        frame.data[0] = 0x42;
-        std::span buffer{&frame, 1};
-        return async::write(sock, std::as_bytes(buffer));
-      })
-    | ignore_all();
+  CAPTURE(Backend::name);
+  if constexpr (!sio::event_loop::socket_loop_for<loop_type, sio::can::raw_protocol>) {
+    SKIP("Backend does not support CAN raw sockets");
+    return;
+  }
 
-  stdexec::sync_wait(exec::when_any(use_socket, ioc.run()));
+  loop_type context{};
+  sio::event_loop::socket sock{&context, sio::can::raw_protocol{}};
+
+  auto use_socket = zip(sio::async::use(sock), just(::can_frame{})) //
+                  | let_value_each([](auto handle, ::can_frame& frame) {
+                      frame.can_id = ::htons(0x1234);
+                      frame.len = 1;
+                      frame.data[0] = 0x42;
+                      sio::bind(handle, can::endpoint{5});
+                      return sio::async::write(handle, sio::const_buffer{&frame, sizeof(frame)});
+                    })
+                  | ignore_all();
+
+  stdexec::sync_wait(exec::when_any(std::move(use_socket), context.run()));
 }

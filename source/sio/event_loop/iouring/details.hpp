@@ -164,9 +164,9 @@ namespace sio::event_loop::iouring {
       return value;
     }
 
-    void bind(endpoint local_endpoint) const {
-      if (
-        ::bind(native_handle(), reinterpret_cast<sockaddr*>(local_endpoint.data()), local_endpoint.size()) == -1) {
+    void bind(endpoint local_endpoint) {
+      auto addr = reinterpret_cast<const sockaddr*>(local_endpoint.data());
+      if (::bind(native_handle(), addr, local_endpoint.size()) == -1) {
         throw std::system_error(errno, std::system_category());
       }
     }

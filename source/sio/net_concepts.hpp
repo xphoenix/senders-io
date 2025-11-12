@@ -131,6 +131,57 @@ namespace sio::async {
 
   inline const connect_t connect{};
 
+  namespace bind_ {
+    struct bind_t;
+  };
+
+  using bind_::bind_t;
+  extern const bind_t bind;
+
+  namespace bind_ {
+    template <class Tp, class... Args>
+    concept has_member_cpo = requires(Tp&& t, Args&&... args) {
+      static_cast<Tp&&>(t).bind(static_cast<Args&&>(args)...);
+    };
+
+    template <class Tp, class... Args>
+    concept nothrow_has_member_cpo = requires(Tp&& t, Args&&... args) {
+      { static_cast<Tp&&>(t).bind(static_cast<Args&&>(args)...) } noexcept;
+    };
+
+    template <class Tp, class... Args>
+    concept has_static_member_cpo = requires(Tp&& t, Args&&... args) {
+      decay_t<Tp>::bind(static_cast<Tp&&>(t), static_cast<Args&&>(args)...);
+    };
+
+    template <class Tp, class... Args>
+    concept nothrow_has_static_member_cpo = requires(Tp&& t, Args&&... args) {
+      { decay_t<Tp>::bind(static_cast<Tp&&>(t), static_cast<Args&&>(args)...) } noexcept;
+    };
+
+    template <class Tp, class... Args>
+    concept has_customization = has_member_cpo<Tp, Args...> || has_static_member_cpo<Tp, Args...>;
+
+    template <class Tp, class... Args>
+    concept nothrow_has_customization =
+      nothrow_has_member_cpo<Tp, Args...> || nothrow_has_static_member_cpo<Tp, Args...>;
+
+    struct bind_t {
+      template <class Tp, class... Args>
+        requires has_customization<Tp, Args...>
+      auto operator()(Tp&& t, Args&&... args) const
+        noexcept(nothrow_has_customization<Tp, Args...>) {
+        if constexpr (has_member_cpo<Tp, Args...>) {
+          return static_cast<Tp&&>(t).bind(static_cast<Args&&>(args)...);
+        } else {
+          return decay_t<Tp>::bind(static_cast<Tp&&>(t), static_cast<Args&&>(args)...);
+        }
+      }
+    };
+  }
+
+  inline const bind_t bind{};
+
   namespace accept_once_ {
     struct accept_once_t;
   };
@@ -337,4 +388,8 @@ namespace sio::async {
   }
 
   inline const recvmsg_t recvmsg{};
+}
+
+namespace sio {
+  using async::bind;
 }

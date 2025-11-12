@@ -46,7 +46,7 @@ set(SIO_TEST_FILE_SOURCES
 set(SIO_TEST_NET_SOURCES
   net/test_async_accept.cpp
   net/test_can_endpoint.cpp
-  # net/test_can_socket.cpp
+  net/test_can_socket.cpp
   net/test_address.cpp
   net/test_endpoint.cpp
   net/test_resolve.cpp

@@ -49,6 +49,9 @@ namespace sio::event_loop {
         loop.connect_socket(socket_state, endpoint)
       };
       {
+        loop.bind(socket_state, endpoint)
+      };
+      {
         loop.close_acceptor(acceptor_state)
       };
       {

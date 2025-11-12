@@ -49,6 +49,10 @@ namespace sio::event_loop {
       return context().connect_socket(const_cast<state_type&>(state()), endpoint);
     }
 
+    auto bind(typename Protocol::endpoint endpoint) const {
+      return context().bind(const_cast<state_type&>(state()), endpoint);
+    }
+
     auto read_some(buffers_type buffers) const {
       return context().read_some(const_cast<state_type&>(state()), buffers);
     }
@@ -106,12 +110,11 @@ namespace sio::event_loop {
     }
 
     auto open() noexcept {
-      return ::stdexec::then(
-        context_.open_socket(protocol_),
-        [this](state_type state) {
-          return socket_handle<loop_type, protocol_type>{
-            context_, static_cast<state_type&&>(state)};
-        });
+      return context_.open_socket(protocol_)
+           // once state constructed handle could be made
+           | ::stdexec::then([pc = &context_](state_type state) {
+               return socket_handle<loop_type, protocol_type>{*pc, static_cast<state_type&&>(state)};
+             });
     }
   };
 
@@ -200,12 +203,10 @@ namespace sio::event_loop {
     }
 
     auto open() noexcept {
-      return ::stdexec::then(
-        context_.open_acceptor(protocol_, endpoint_),
-        [this](state_type state) {
-          return acceptor_handle<loop_type, protocol_type>{
-            context_, static_cast<state_type&&>(state), endpoint_};
-        });
+      return context_.open_acceptor(protocol_, endpoint_)
+           | ::stdexec::then([pc = &context_, ep = endpoint_](state_type state) {
+               return acceptor_handle<loop_type, protocol_type>{*pc, static_cast<state_type&&>(state), ep};
+             });
     }
   };
 

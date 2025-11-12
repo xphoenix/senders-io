@@ -198,6 +198,11 @@ namespace sio::event_loop::iouring {
     }
 
     template <class Protocol>
+    void bind(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
+      state.bind(endpoint);
+    }
+
+    template <class Protocol>
     auto read_some(
       socket_state<Protocol>& state,
       typename socket_state<Protocol>::buffers_type buffers) {
