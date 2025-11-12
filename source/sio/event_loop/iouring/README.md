@@ -28,9 +28,9 @@ senders) remains interchangeable.
 | `acceptor_state<Protocol>` | Listener holder with cached local endpoint, used for `accept_once`. |
 | `completion_slot` | Per-operation bookkeeping (SQE prep, receiver pointer, cancellation token management). |
 | `stop_callback` | Bridges `stdexec::stop_token` to `io_uring_prep_cancel` and guards against races. |
-| `read_sender` / `write_sender` (+ single-buffer variants) | Issue `IORING_OP_READ(V)`/`WRITE(V)` with completion dispatch. |
+| `fd_read_sender_span` / `fd_read_sender_single` / `fd_write_sender_span` / `fd_write_sender_single` | Issue `IORING_OP_READ(V)`/`WRITE(V)` with completion dispatch. |
 | `socket_connect_sender` / `socket_accept_sender` / `socket_sendmsg_sender` | Socket primitives mapped to the corresponding `io_uring` ops. |
-| `close_sender` | Wraps `IORING_OP_CLOSE` (or fallbacks) for deterministic descriptor teardown. |
+| `fd_close_sender` | Wraps `IORING_OP_CLOSE` (or fallbacks) for deterministic descriptor teardown. |
 
 ## Implementation Plan
 

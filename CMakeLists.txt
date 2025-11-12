@@ -174,7 +174,15 @@ if (SIO_ENABLE_BACKEND_IOURING)
         source/sio/event_loop/iouring/backend.hpp
         source/sio/event_loop/iouring/context.hpp
         source/sio/event_loop/iouring/details.hpp
-        source/sio/event_loop/iouring/operations.hpp
+        source/sio/event_loop/iouring/fd_close.hpp
+        source/sio/event_loop/iouring/fd_read.hpp
+        source/sio/event_loop/iouring/fd_write.hpp
+        source/sio/event_loop/iouring/file_open.hpp
+        source/sio/event_loop/iouring/socket_accept.hpp
+        source/sio/event_loop/iouring/socket_connect.hpp
+        source/sio/event_loop/iouring/socket_open.hpp
+        source/sio/event_loop/iouring/socket_sendmsg.hpp
+        source/sio/event_loop/iouring/submission_operation.hpp
         source/sio/event_loop/iouring/run_sender.hpp
         source/sio/event_loop/iouring/scheduler.hpp)
   sio_install_backend(sio_backend_iouring iouring_backend_headers)

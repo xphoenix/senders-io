@@ -296,11 +296,6 @@ class backend {
     return stdexec_backend::accept_sender<Protocol>{&state};
   }
 
- template <class Protocol>
-  auto close_acceptor(acceptor_state<Protocol>& state) noexcept {
-    return close(static_cast<fd_state&>(state));
-  }
-
  private:
   static int to_open_flags(async::mode mode, async::creation creation) noexcept {
     int flags = O_CLOEXEC;

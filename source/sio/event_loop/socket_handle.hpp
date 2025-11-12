@@ -158,7 +158,7 @@ namespace sio::event_loop {
     }
 
     auto close() const noexcept {
-      return context().close_acceptor(const_cast<state_type&>(state()));
+      return context().close(const_cast<state_type&>(state()));
     }
 
    private:

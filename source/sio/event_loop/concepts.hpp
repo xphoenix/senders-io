@@ -52,9 +52,6 @@ namespace sio::event_loop {
         loop.bind(socket_state, endpoint)
       };
       {
-        loop.close_acceptor(acceptor_state)
-      };
-      {
         loop.read_some(
           socket_state,
           std::declval<typename socket_state_t<Loop, Protocol>::buffers_type>())

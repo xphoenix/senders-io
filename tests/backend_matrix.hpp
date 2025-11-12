@@ -103,8 +103,8 @@ namespace sio::test {
     using loop_type = sio::event_loop::iouring::backend;
     using native_context_type = typename loop_type::native_context_type;
     using run_mode = sio::event_loop::iouring::run_mode;
-    using read_factory = sio::event_loop::iouring::read_factory;
-    using write_factory = sio::event_loop::iouring::write_factory;
+    using read_factory = sio::event_loop::iouring::fd_read_factory;
+    using write_factory = sio::event_loop::iouring::fd_write_factory;
 
     static loop_type make_loop() {
       return loop_type{};

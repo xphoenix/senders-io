@@ -1,9 +1,16 @@
 #pragma once
 
 #include "context.hpp"
-#include "operations.hpp"
+#include "fd_close.hpp"
+#include "fd_read.hpp"
+#include "fd_write.hpp"
+#include "file_open.hpp"
 #include "run_sender.hpp"
 #include "scheduler.hpp"
+#include "socket_accept.hpp"
+#include "socket_connect.hpp"
+#include "socket_open.hpp"
+#include "socket_sendmsg.hpp"
 
 #include "../../sequence/buffered_sequence.hpp"
 #include "../../sequence/reduce.hpp"
@@ -23,11 +30,17 @@ namespace sio::event_loop::iouring {
    public:
     using native_context_type = io_context;
     using env = iouring::env;
-    using close_sender = iouring::close_sender;
-
     using fd_state = iouring::fd_state;
     using file_state = iouring::file_state;
     using seekable_file_state = iouring::seekable_file_state;
+
+    using fd_close_sender = iouring::fd_close_sender;
+    using fd_read_sender_span = iouring::fd_read_sender_span;
+    using fd_read_sender_single = iouring::fd_read_sender_single;
+    using fd_read_factory = iouring::fd_read_factory;
+    using fd_write_sender_span = iouring::fd_write_sender_span;
+    using fd_write_sender_single = iouring::fd_write_sender_single;
+    using fd_write_factory = iouring::fd_write_factory;
 
     template <class Protocol>
     using socket_state = iouring::socket_state<Protocol>;
@@ -66,89 +79,89 @@ namespace sio::event_loop::iouring {
     }
 
     auto close(fd_state& state) noexcept {
-      return close_sender{&state.context(), state.native_handle()};
+      return fd_close_sender{&state.context(), state.native_handle()};
     }
 
     auto read_some(fd_state& state, sio::mutable_buffer_span buffers) {
-      return read_sender{state.context(), buffers, state.native_handle()};
+      return fd_read_sender_span{state.context(), buffers, state.native_handle()};
     }
 
     auto read_some(fd_state& state, sio::mutable_buffer buffer) {
-      return read_sender_single{state.context(), buffer, state.native_handle()};
+      return fd_read_sender_single{state.context(), buffer, state.native_handle()};
     }
 
     auto write_some(fd_state& state, sio::const_buffer_span buffers) {
-      return write_sender{state.context(), buffers, state.native_handle()};
+      return fd_write_sender_span{state.context(), buffers, state.native_handle()};
     }
 
     auto write_some(fd_state& state, sio::const_buffer buffer) {
-      return write_sender_single{state.context(), buffer, state.native_handle()};
+      return fd_write_sender_single{state.context(), buffer, state.native_handle()};
     }
 
     auto read(fd_state& state, sio::mutable_buffer_span buffers) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(read_factory{&state.context(), state.native_handle()}, buffers),
+        ::sio::buffered_sequence(fd_read_factory{&state.context(), state.native_handle()}, buffers),
         0ull);
     }
 
     auto read(fd_state& state, sio::mutable_buffer buffer) {
       auto buffered = ::sio::buffered_sequence(
-        read_factory{&state.context(), state.native_handle()}, buffer);
+        fd_read_factory{&state.context(), state.native_handle()}, buffer);
       return ::sio::reduce(std::move(buffered), 0ull);
     }
 
     auto write(fd_state& state, sio::const_buffer_span buffers) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(write_factory{&state.context(), state.native_handle()}, buffers),
+        ::sio::buffered_sequence(fd_write_factory{&state.context(), state.native_handle()}, buffers),
         0ull);
     }
 
     auto write(fd_state& state, sio::const_buffer buffer) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(write_factory{&state.context(), state.native_handle()}, buffer),
+        ::sio::buffered_sequence(fd_write_factory{&state.context(), state.native_handle()}, buffer),
         0ull);
     }
 
     auto read_some(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
-      return read_sender{state.context(), buffers, state.native_handle(), offset};
+      return fd_read_sender_span{state.context(), buffers, state.native_handle(), offset};
     }
 
     auto read_some(seekable_file_state& state, sio::mutable_buffer buffer, ::off_t offset) {
-      return read_sender_single{state.context(), buffer, state.native_handle(), offset};
+      return fd_read_sender_single{state.context(), buffer, state.native_handle(), offset};
     }
 
     auto write_some(seekable_file_state& state, sio::const_buffer_span buffers, ::off_t offset) {
-      return write_sender{state.context(), buffers, state.native_handle(), offset};
+      return fd_write_sender_span{state.context(), buffers, state.native_handle(), offset};
     }
 
     auto write_some(seekable_file_state& state, sio::const_buffer buffer, ::off_t offset) {
-      return write_sender_single{state.context(), buffer, state.native_handle(), offset};
+      return fd_write_sender_single{state.context(), buffer, state.native_handle(), offset};
     }
 
     auto read(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
       return ::sio::reduce(
         ::sio::buffered_sequence(
-          read_factory{&state.context(), state.native_handle()}, buffers, offset),
+          fd_read_factory{&state.context(), state.native_handle()}, buffers, offset),
         0ull);
     }
 
     auto read(seekable_file_state& state, sio::mutable_buffer buffer, ::off_t offset) {
       auto buffered = ::sio::buffered_sequence(
-        read_factory{&state.context(), state.native_handle()}, buffer, offset);
+        fd_read_factory{&state.context(), state.native_handle()}, buffer, offset);
       return ::sio::reduce(std::move(buffered), 0ull);
     }
 
     auto write(seekable_file_state& state, sio::const_buffer_span buffers, ::off_t offset) {
       return ::sio::reduce(
         ::sio::buffered_sequence(
-          write_factory{&state.context(), state.native_handle()}, buffers, offset),
+          fd_write_factory{&state.context(), state.native_handle()}, buffers, offset),
         0ull);
     }
 
     auto write(seekable_file_state& state, sio::const_buffer buffer, ::off_t offset) {
       return ::sio::reduce(
         ::sio::buffered_sequence(
-          write_factory{&state.context(), state.native_handle()}, buffer, offset),
+          fd_write_factory{&state.context(), state.native_handle()}, buffer, offset),
         0ull);
     }
 
@@ -164,7 +177,7 @@ namespace sio::event_loop::iouring {
         to_open_flags(mode, creation),
         to_mode(mode)};
       return file_open_sender<file_state>{
-        context_, static_cast<open_data&&>(data), mode, creation, caching};
+        &context_, static_cast<open_data&&>(data), mode, creation, caching};
     }
 
     auto open_seekable_file(
@@ -179,12 +192,12 @@ namespace sio::event_loop::iouring {
         to_open_flags(mode, creation),
         to_mode(mode)};
       return file_open_sender<seekable_file_state>{
-        context_, static_cast<open_data&&>(data), mode, creation, caching};
+        &context_, static_cast<open_data&&>(data), mode, creation, caching};
     }
 
     template <class Protocol>
     auto open_socket(Protocol protocol) {
-      return open_sender<Protocol>{&context_, protocol};
+      return socket_open_sender<Protocol>{&context_, protocol};
     }
 
     template <class Protocol>
@@ -214,7 +227,7 @@ namespace sio::event_loop::iouring {
 
     template <class Protocol>
     auto connect(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
-      return connect_sender<Protocol>{&state, endpoint};
+      return socket_connect_sender<Protocol>{&state, endpoint};
     }
 
     template <class Protocol>
@@ -224,12 +237,7 @@ namespace sio::event_loop::iouring {
 
     template <class Protocol>
     auto accept_once(acceptor_state<Protocol>& state) {
-      return accept_sender<Protocol>{&state};
-    }
-
-    template <class Protocol>
-    auto close_acceptor(acceptor_state<Protocol>& state) noexcept {
-      return close(static_cast<fd_state&>(state));
+      return socket_accept_sender<Protocol>{&state};
     }
 
    private:
