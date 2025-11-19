@@ -17,14 +17,15 @@
  */
 #pragma once
 
+#include <cstddef>
 #include <utility>
 
-namespace sio {
+namespace sio::intrusive {
   template <auto Next>
-  struct intrusive_iterator;
+  struct iterator;
 
   template <class Item, Item* Item::* Next>
-  struct intrusive_iterator<Next> {
+  struct iterator<Next> {
     using difference_type = std::ptrdiff_t;
     Item* item_ = nullptr;
 
@@ -36,78 +37,97 @@ namespace sio {
       return item_;
     }
 
-    intrusive_iterator& operator++() noexcept {
+    iterator& operator++() noexcept {
       item_ = item_->*Next;
       return *this;
     }
 
-    intrusive_iterator operator++(int) noexcept {
-      intrusive_iterator copy{*this};
+    iterator operator++(int) noexcept {
+      iterator copy{*this};
       item_ = item_->*Next;
       return copy;
     }
 
-    friend bool operator==(const intrusive_iterator& lhs, const intrusive_iterator& rhs) noexcept {
+    friend bool operator==(const iterator& lhs, const iterator& rhs) noexcept {
       return lhs.item_ == rhs.item_;
     }
 
-    friend bool operator!=(const intrusive_iterator& lhs, const intrusive_iterator& rhs) noexcept {
+    friend bool operator!=(const iterator& lhs, const iterator& rhs) noexcept {
       return lhs.item_ != rhs.item_;
     }
   };
 
   template <auto Next, auto Prev>
-  class intrusive_list;
+  class list;
 
   template <class Item, Item* Item::* Next, Item* Item::* Prev>
-  class intrusive_list<Next, Prev> {
+  class list<Next, Prev> {
    public:
-    intrusive_list() noexcept = default;
+    list() noexcept = default;
 
-    intrusive_list(intrusive_list&& other) noexcept
+    list(list&& other) noexcept
       : head_(std::exchange(other.head_, nullptr))
       , tail_(std::exchange(other.tail_, nullptr)) {
     }
 
-    intrusive_list& operator=(intrusive_list other) noexcept {
+    list& operator=(list other) noexcept {
       std::swap(head_, other.head_);
       std::swap(tail_, other.tail_);
       return *this;
     }
 
-    intrusive_iterator<Next> begin() const noexcept {
-      return intrusive_iterator<Next>{head_};
+    iterator<Next> begin() const noexcept {
+      return iterator<Next>{head_};
     }
 
-    intrusive_iterator<Next> end() const noexcept {
-      return intrusive_iterator<Next>{};
+    iterator<Next> end() const noexcept {
+      return iterator<Next>{};
     }
 
     [[nodiscard]] bool empty() const noexcept {
       return head_ == nullptr;
     }
 
+    [[nodiscard]] Item* front() const noexcept {
+      return head_;
+    }
+
+    [[nodiscard]] Item* back() const noexcept {
+      return tail_;
+    }
+
     [[nodiscard]] Item* front() noexcept {
       return head_;
     }
 
+    [[nodiscard]] Item* back() noexcept {
+      return tail_;
+    }
+
     [[nodiscard]] Item* pop_front() noexcept {
+      if (head_ == nullptr) {
+        return nullptr;
+      }
       Item* item = std::exchange(head_, head_->*Next);
-      if (item->*Next == nullptr) {
+      if (head_ == nullptr) {
         tail_ = nullptr;
       } else {
-        item->*Next->*Prev = nullptr;
+        head_->*Prev = nullptr;
       }
+      item->*Next = nullptr;
+      item->*Prev = nullptr;
       return item;
     }
 
     void push_front(Item* item) noexcept {
+      item->*Prev = nullptr;
       item->*Next = head_;
-      head_ = item;
-      if (tail_ == nullptr) {
+      if (head_ != nullptr) {
+        head_->*Prev = item;
+      } else {
         tail_ = item;
-        head_->*Next->*Prev = head_;
       }
+      head_ = item;
     }
 
     void push_back(Item* item) noexcept {
@@ -121,7 +141,10 @@ namespace sio {
       tail_ = item;
     }
 
-    void erase(Item* item) {
+    void erase(Item* item) noexcept {
+      if (item == nullptr) {
+        return;
+      }
       if (item->*Prev == nullptr) {
         head_ = item->*Next;
       } else {
@@ -132,9 +155,11 @@ namespace sio {
       } else {
         item->*Next->*Prev = item->*Prev;
       }
+      item->*Next = nullptr;
+      item->*Prev = nullptr;
     }
 
-    void append(intrusive_list other) noexcept {
+    void append(list other) noexcept {
       if (other.empty())
         return;
       auto* other_head = std::exchange(other.head_, nullptr);
@@ -146,7 +171,7 @@ namespace sio {
       tail_ = std::exchange(other.tail_, nullptr);
     }
 
-    void prepend(intrusive_list other) noexcept {
+    void prepend(list other) noexcept {
       if (other.empty())
         return;
 
@@ -164,4 +189,4 @@ namespace sio {
     Item* head_ = nullptr;
     Item* tail_ = nullptr;
   };
-} // namespace sio
+} // namespace sio::intrusive

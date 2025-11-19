@@ -17,7 +17,7 @@
 #pragma once
 
 #include "./sequence_concepts.hpp"
-#include "../intrusive_queue.hpp"
+#include "../intrusive/queue.hpp"
 
 #include <optional>
 #include <utility>
@@ -39,7 +39,7 @@ namespace sio {
 
     template <class... Results>
     using item_operation_queues =
-      std::tuple<intrusive_queue<&item_operation_result<Results>::next_>...>;
+      std::tuple<intrusive::queue<&item_operation_result<Results>::next_>...>;
 
     struct on_stop_requested {
       inplace_stop_source& stop_source_;

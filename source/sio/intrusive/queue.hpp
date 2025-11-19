@@ -19,27 +19,27 @@
 
 #include <utility>
 
-namespace sio {
+namespace sio::intrusive {
   template <auto Next>
-  class intrusive_queue;
+  class queue;
 
   template <class Item, Item* Item::* Next>
-  class intrusive_queue<Next> {
+  class queue<Next> {
    public:
-    intrusive_queue() noexcept = default;
+    queue() noexcept = default;
 
-    intrusive_queue(intrusive_queue&& other) noexcept
+    queue(queue&& other) noexcept
       : head_(std::exchange(other.head_, nullptr))
       , tail_(std::exchange(other.tail_, nullptr)) {
     }
 
-    intrusive_queue& operator=(intrusive_queue other) noexcept {
+    queue& operator=(queue other) noexcept {
       std::swap(head_, other.head_);
       std::swap(tail_, other.tail_);
       return *this;
     }
 
-    static intrusive_queue make_reversed(Item* list) noexcept {
+    static queue make_reversed(Item* list) noexcept {
       Item* new_head = nullptr;
       Item* new_tail = list;
       while (list != nullptr) {
@@ -49,7 +49,7 @@ namespace sio {
         list = next;
       }
 
-      intrusive_queue result;
+      queue result;
       result.head_ = new_head;
       result.tail_ = new_tail;
       return result;
@@ -59,11 +59,26 @@ namespace sio {
       return head_ == nullptr;
     }
 
+    [[nodiscard]] Item* front() const noexcept {
+      return head_;
+    }
+
     [[nodiscard]] Item* front() noexcept {
       return head_;
     }
 
+    [[nodiscard]] Item* back() const noexcept {
+      return tail_;
+    }
+
+    [[nodiscard]] Item* back() noexcept {
+      return tail_;
+    }
+
     [[nodiscard]] Item* pop_front() noexcept {
+      if (head_ == nullptr) {
+        return nullptr;
+      }
       Item* item = std::exchange(head_, head_->*Next);
       // This should test if head_ == nullptr, but due to a bug in
       // nvc++'s optimization, `head_` isn't assigned until later.
@@ -71,6 +86,7 @@ namespace sio {
       if (item->*Next == nullptr) {
         tail_ = nullptr;
       }
+      item->*Next = nullptr;
       return item;
     }
 
@@ -92,7 +108,7 @@ namespace sio {
       tail_ = item;
     }
 
-    void append(intrusive_queue other) noexcept {
+    void append(queue other) noexcept {
       if (other.empty())
         return;
       auto* other_head = std::exchange(other.head_, nullptr);
@@ -104,7 +120,7 @@ namespace sio {
       tail_ = std::exchange(other.tail_, nullptr);
     }
 
-    void prepend(intrusive_queue other) noexcept {
+    void prepend(queue other) noexcept {
       if (other.empty())
         return;
 
@@ -122,4 +138,4 @@ namespace sio {
     Item* head_ = nullptr;
     Item* tail_ = nullptr;
   };
-} // namespace sio
+} // namespace sio::intrusive

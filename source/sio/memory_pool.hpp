@@ -17,7 +17,7 @@
 
 #include "./assert.hpp"
 #include "./concepts.hpp"
-#include "./intrusive_list.hpp"
+#include "./intrusive/list.hpp"
 
 #include <array>
 #include <cstring>
@@ -206,7 +206,7 @@ namespace sio {
     memory_resource* upstream_{};
     std::mutex mutex_{};
     std::array<void*, 32> block_lists_{};
-    std::array<intrusive_list<&allocate_operation_base::next_, &allocate_operation_base::prev_>, 32>
+    std::array<intrusive::list<&allocate_operation_base::next_, &allocate_operation_base::prev_>, 32>
       pending_allocation_{};
 
     void reclaim_memory(void* ptr) noexcept;

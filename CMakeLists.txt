@@ -45,6 +45,7 @@ option(SIO_EXAMPLES "Build examples" ${PROJECT_IS_TOP_LEVEL})
 option(SIO_ENABLE_BACKEND_STDEXEC "Enable stdexec-backed event loop integration" ON)
 cmake_dependent_option(SIO_ENABLE_BACKEND_IOURING "Enable io_uring-backed event loop integration" ON "SIO_PLATFORM_LINUX" OFF)
 option(SIO_ENABLE_ASAN "Enable address sanitizer" OFF)
+option(SIO_ENABLE_TEST_COVERAGE "Enable compiler instrumentation for coverage reports" OFF)
 
 if (SIO_ENABLE_ASAN)
   set(SIO_ASAN_FLAGS "-fsanitize=address -fno-omit-frame-pointer" CACHE STRING "ASan compile flags")
@@ -62,6 +63,25 @@ if(SIO_FETCH_CONTENT)
   include(FetchStdexec)
 else()
   find_package(STDEXEC REQUIRED)
+endif()
+
+if (SIO_ENABLE_TEST_COVERAGE)
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set(SIO_COVERAGE_COMPILE_FLAGS "--coverage" CACHE STRING "Coverage compile flags")
+    set(SIO_COVERAGE_LINK_FLAGS "--coverage" CACHE STRING "Coverage link flags")
+  elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(SIO_COVERAGE_COMPILE_FLAGS "-fprofile-instr-generate;-fcoverage-mapping" CACHE STRING "Coverage compile flags")
+    set(SIO_COVERAGE_LINK_FLAGS "-fprofile-instr-generate;-fcoverage-mapping" CACHE STRING "Coverage link flags")
+  else()
+    message(WARNING "SIO_ENABLE_TEST_COVERAGE is only supported with GCC or Clang.")
+  endif()
+
+  if (SIO_COVERAGE_COMPILE_FLAGS)
+    add_compile_options(${SIO_COVERAGE_COMPILE_FLAGS})
+  endif()
+  if (SIO_COVERAGE_LINK_FLAGS)
+    add_link_options(${SIO_COVERAGE_LINK_FLAGS})
+  endif()
 endif()
 
 # Core lib
@@ -118,8 +138,9 @@ target_sources(sio PUBLIC
     source/sio/const_buffer_span.hpp
     source/sio/const_buffer.hpp
     source/sio/deferred.hpp
-    source/sio/intrusive_list.hpp
-    source/sio/intrusive_queue.hpp
+    source/sio/intrusive/list.hpp
+    source/sio/intrusive/queue.hpp
+    source/sio/intrusive/heap.hpp
     source/sio/io_concepts.hpp
     source/sio/mutable_buffer.hpp
     source/sio/mutable_buffer_span.hpp

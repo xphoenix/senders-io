@@ -19,7 +19,7 @@
 #include "./async_resource.hpp"
 #include "./deferred.hpp"
 
-#include "./intrusive_list.hpp"
+#include "./intrusive/list.hpp"
 #include "./sequence/any_sequence_of.hpp"
 #include "./sequence/ignore_all.hpp"
 
@@ -38,7 +38,7 @@ namespace sio {
     template <class Completions>
     struct context {
       async_mutex mutex_{};
-      intrusive_list<&observer<Completions>::prev, &observer<Completions>::next> observers_{};
+      intrusive::list<&observer<Completions>::prev, &observer<Completions>::next> observers_{};
       exec::async_scope scope_{};
     };
 
