@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <mutex>
 #include <system_error>
-#include <iostream>
 
 namespace sio::event_loop::iouring {
   class scheduler;
@@ -172,7 +171,6 @@ namespace sio::event_loop::iouring {
     auto* base = static_cast<completion_base*>(
       reinterpret_cast<void*>(::io_uring_cqe_get_data64(&cqe)));
 
-    std::cout << "dispatch: " << base << std::endl;
     if (base != nullptr) {
       base->complete(cqe);
     }
