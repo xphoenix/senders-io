@@ -5,8 +5,8 @@ This document tracks the planned changes for exercising every available
 behavioural differences between backends unless noted otherwise.
 
 ## 1. Introduce a shared backend matrix helper
-- Add `tests/backend_matrix.hpp` that enumerates the usable backend types and
-  provides compile-time availability flags.
+- Add `tests/common/backend_matrix.hpp` that enumerates the usable backend types
+  and provides compile-time availability flags.
 - Detect `stdexec` support unconditionally.
 - Detect `io_uring` support by checking for `<liburing.h>` and optionally a
   `SIO_TEST_HAS_IOURING` compile definition supplied by CMake.
@@ -45,4 +45,3 @@ behavioural differences between backends unless noted otherwise.
   conditional code covered.
 - After migration, validate locally by running `ctest --output-on-failure` and
   confirming the test report lists each backend variant separately.
-

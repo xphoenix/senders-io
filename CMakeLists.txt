@@ -194,6 +194,8 @@ if (BUILD_TESTING)
   else()
     find_package(Catch2 REQUIRED)
   endif()
+  include(CTest)
+  enable_testing()
   add_subdirectory(tests)
 endif()
 

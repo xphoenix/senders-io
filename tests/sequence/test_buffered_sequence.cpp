@@ -18,7 +18,7 @@
 #include "sio/mutable_buffer.hpp"
 #include "sio/sequence/buffered_sequence.hpp"
 #include "sio/sequence/ignore_all.hpp"
-#include "backend_matrix.hpp"
+#include "common/backend_matrix.hpp"
 
 #include <catch2/catch_all.hpp>
 
