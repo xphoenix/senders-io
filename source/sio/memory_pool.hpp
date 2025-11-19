@@ -39,11 +39,7 @@ namespace sio {
     memory_resource& operator=(const memory_resource&) = default;
 
     [[nodiscard]] void* allocate(size_t __bytes, size_t __alignment = _S_max_align) noexcept {
-      void* ptr = do_allocate(__bytes, __alignment);
-      if (ptr) {
-        return ::operator new(__bytes, do_allocate(__bytes, __alignment));
-      }
-      return nullptr;
+      return do_allocate(__bytes, __alignment);
     }
 
     void deallocate(void* __p, size_t __bytes, size_t __alignment = _S_max_align) noexcept {
@@ -70,8 +66,8 @@ namespace sio {
         return ::operator new(__bytes, std::align_val_t(__alignment));
       }
 
-      void do_deallocate(void* __p, size_t, size_t) noexcept override {
-        ::operator delete(__p);
+      void do_deallocate(void* __p, size_t, size_t align) noexcept override {
+        ::operator delete(__p, std::align_val_t(align));
       }
 
       bool do_is_equal(const memory_resource& __other) const noexcept override {
