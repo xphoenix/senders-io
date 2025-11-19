@@ -6,11 +6,13 @@
 #include "sio/sequence/last.hpp"
 #include "sio/sequence/let_value_each.hpp"
 #include "sio/sequence/then_each.hpp"
+#include "sio/sequence/repeat.hpp"
 
 #include <catch2/catch_all.hpp>
 
 #include <exec/sequence/ignore_all_values.hpp>
 #include <exec/sequence_senders.hpp>
+#include <ranges>
 
 TEST_CASE("fork - with iterate", "[sio][fork]") {
   std::array<int, 3> arr{1, 2, 3};
@@ -23,8 +25,8 @@ TEST_CASE("fork - with iterate", "[sio][fork]") {
 
 TEST_CASE("fork - with iterate and ignore_all", "[sio][fork]") {
   std::array<double, 3> arr{1.0, 2, 3};
-  auto sndr = sio::iterate(arr) //
-            | sio::fork()       //
+  auto sndr = sio::iterate(std::views::all(arr)) //
+            | sio::fork()                        //
             | sio::ignore_all();
   stdexec::sync_wait(std::move(sndr));
 }
@@ -40,36 +42,36 @@ TEST_CASE("fork - with then_each and ignore_all", "[sio][fork]") {
 }
 
 // FIX: first and last can't stop fork.
-// TEST_CASE("fork - with iterate and first", "[sio][fork]") {
-//   std::array<int, 3> arr{1, 2, 3};
-//   auto sndr = sio::iterate(std::views::all(arr)) //
-//             | sio::fork()                        //
-//             | sio::first();
-//   stdexec::sync_wait(std::move(sndr)).value();
-// }
-//
-// TEST_CASE("fork - with iterate and last", "[sio][fork]") {
-//   std::array<int, 3> arr{1, 2, 3};
-//   auto sndr = sio::iterate(std::views::all(arr)) //
-//             | sio::fork()                        //
-//             | sio::last();
-//   stdexec::sync_wait(std::move(sndr)).value();
-// }
-//
-// TEST_CASE("fork - a compilcated case", "[zip][iterate][fork]") {
-//   std::array<int, 2> arr{42, 43};
-//
-//   auto sender = sio::iterate(arr) //
-//               | sio::fork()       //
-//               | sio::let_value_each([arr](int) {
-//                   return sio::iterate(arr)                                                //
-//                        | sio::fork()                                                      //
-//                        | sio::let_value_each([](int) { return stdexec::just_stopped(); }) //
-//                        | sio::ignore_all();
-//                 })
-//               | sio::ignore_all();
-//   stdexec::sync_wait(std::move(sender));
-// }
+TEST_CASE("fork - with iterate and first", "[sio][fork]") {
+  std::array<int, 3> arr{1, 2, 3};
+  auto sndr = sio::iterate(std::views::all(arr)) //
+            | sio::fork()                        //
+            | sio::first();
+  stdexec::sync_wait(std::move(sndr)).value();
+}
+
+TEST_CASE("fork - with iterate and last", "[sio][fork]") {
+  std::array<int, 3> arr{1, 2, 3};
+  auto sndr = sio::iterate(std::views::all(arr)) //
+            | sio::fork()                        //
+            | sio::last();
+  stdexec::sync_wait(std::move(sndr)).value();
+}
+
+TEST_CASE("fork - a compilcated case", "[zip][iterate][fork]") {
+  std::array<int, 2> arr{42, 43};
+
+  auto sender = sio::iterate(std::views::all(arr)) //
+              | sio::fork()                        //
+              | sio::let_value_each([arr](int) {
+                  return sio::iterate(std::views::all(arr))                               //
+                       | sio::fork()                                                      //
+                       | sio::let_value_each([](int) { return stdexec::just_stopped(); }) //
+                       | sio::ignore_all();
+                })
+              | sio::ignore_all();
+  stdexec::sync_wait(std::move(sender));
+}
 
 // TODO: Stack overflow
 // TEST_CASE("fork - with repeat and just_stopped", "[sio][fork]") {
@@ -78,6 +80,7 @@ TEST_CASE("fork - with then_each and ignore_all", "[sio][fork]") {
 //             | sio::ignore_all();
 //   stdexec::sync_wait(std::move(sndr));
 // }
+
 //
 // TEST_CASE("fork - with repeat and ignore_all", "[sio][fork]") {
 //   auto sndr = sio::repeat(stdexec::just(42)) //

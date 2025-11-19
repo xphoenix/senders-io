@@ -20,12 +20,12 @@
 #include "../concepts.hpp"
 #include "../async_allocator.hpp"
 #include "./sequence_concepts.hpp"
+#include "stdexec/__detail/__just.hpp"
 
 #include <exec/env.hpp>
 #include <exec/variant_sender.hpp>
 #include <exec/sequence_senders.hpp>
 #include <exec/__detail/__basic_sequence.hpp>
-#include <iostream>
 #include <stdexec/__detail/__concepts.hpp>
 #include <stdexec/__detail/__meta.hpp>
 
@@ -34,7 +34,7 @@ namespace sio {
 
     template <class ThenSender, class ElseSender>
     exec::variant_sender<ThenSender, ElseSender>
-      if_then_else(bool condition, ThenSender then, ElseSender otherwise) {
+      if_then_else(bool condition, ThenSender&& then, ElseSender&& otherwise) {
       if (condition) {
         return then;
       }
@@ -63,9 +63,11 @@ namespace sio {
         : next_rcvr_{static_cast<SeqRcvr&&>(rcvr)} {
       }
 
-      ~operation_base() {
-        std::cout << "[" << this << "] operation_base is dead" << std::endl;
-      }
+      operation_base(const operation_base&) = delete;
+      operation_base& operator=(const operation_base&) = delete;
+
+      operation_base(operation_base&&) = delete;
+      operation_base& operator=(operation_base&&) = delete;
 
       SeqRcvr next_rcvr_;
       std::atomic<std::ptrdiff_t> ref_counter_{0};
@@ -86,10 +88,13 @@ namespace sio {
       }
 
       bool increase_ref() {
+        if (stop_requested()) {
+          return false;
+        }
         std::ptrdiff_t expected = 1;
         while (
           !ref_counter_.compare_exchange_weak(expected, expected + 1, std::memory_order_relaxed)) {
-          if (expected == 0) {
+          if (expected == 0 || stop_requested()) {
             return false;
           }
         }
@@ -226,17 +231,12 @@ namespace sio {
     };
 
     template <class Item, class SeqRcvr, class ErrorsVariant>
-    struct item_operation {
+      struct item_operation {
       explicit item_operation(Item item, operation_base<SeqRcvr, ErrorsVariant>* base)
         : sequence_op_{base}
         , inner_operations_{
             exec::set_next(base->next_rcvr_, static_cast<Item&&>(item)),
             item_receiver_t{this}} {
-        std::cout << "[" << this << "] item_operation created" << std::endl;
-      }
-
-      ~item_operation() {
-        std::cout << "[" << this << "] item_operation destroyed" << std::endl;
       }
 
       using next_sender_t = exec::next_sender_of_t<SeqRcvr, Item>;
@@ -289,17 +289,13 @@ namespace sio {
 
     template <class Item, class SeqRcvr, class ErrorsVariant>
     void item_receiver<Item, SeqRcvr, ErrorsVariant>::set_value() noexcept {
-      std::cout << "[" << this << "] item_receiver: set_value#begin" << std::endl;
       item_op_->start_delete_operation();
-      std::cout << "[" << this << "] item_receiver: set_value#end" << std::endl;
     }
 
     template <class Item, class SeqRcvr, class ErrorsVariant>
     void item_receiver<Item, SeqRcvr, ErrorsVariant>::set_stopped() noexcept {
-      std::cout << "[" << this << "] item_receiver: set_stopped#begin" << std::endl;
       item_op_->sequence_op_->request_stop();
       item_op_->start_delete_operation();
-      std::cout << "[" << this << "] item_receiver: set_stopped#end" << std::endl;
     }
 
     template <class Item, class SeqRcvr, class ErrorsVariant>
@@ -315,14 +311,10 @@ namespace sio {
 
       operation_base<SeqRcvr, ErrorsVariant>* op_;
 
-      ~receiver() {
-        std::cout << "[" << this << "] fork::receiver is dead" << std::endl;
-      }
-
       template <class Item>
-      auto set_next(Item&& item) {
+      auto set_next(Item&& item) noexcept {
         return stdexec::just(static_cast<Item&&>(item))
-             | stdexec::let_value([op = op_](Item& item) noexcept {
+             | stdexec::let_value([op = op_](Item item) noexcept {
                  return if_then_else(
                    op->increase_ref(), static_cast<Item&&>(item), stdexec::just_stopped());
                })
@@ -337,15 +329,13 @@ namespace sio {
                           stdexec::start(*item_op);
                         });
                })
-             | stdexec::upon_stopped([op = op_]() noexcept {
-                 std::cout << "set_next#upon_stopped called" << std::endl;
+             | stdexec::let_stopped([op = op_]() noexcept {
                  op->request_stop();
-                 // op->decrease_ref();
+                 return stdexec::just_stopped();
                })
              | stdexec::upon_error([op = op_]<class Err>(Err&& err) noexcept {
                  op->set_error(static_cast<Err&&>(err));
                  op->request_stop();
-                 // op->decrease_ref();
                });
       }
 
@@ -361,7 +351,9 @@ namespace sio {
       }
 
       void set_stopped() && noexcept {
-        op_->set_stopped();
+        if (!op_->stop_requested()) {
+          op_->set_stopped();
+        }
         op_->request_stop();
         op_->decrease_ref();
       }
