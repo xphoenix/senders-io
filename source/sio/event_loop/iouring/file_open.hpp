@@ -36,20 +36,11 @@ namespace sio::event_loop::iouring {
     : public submission_operation<file_open_operation<Receiver, State>, Receiver>
     , public open_submission {
    public:
-    file_open_operation(
-      open_data data,
-      io_context& ctx,
-      async::mode mode,
-      async::creation creation,
-      async::caching caching,
-      Receiver&& rcvr)
+    file_open_operation(open_data data, io_context& ctx, Receiver&& rcvr)
       : submission_operation<
           file_open_operation<Receiver, State>,
           Receiver>{ctx, static_cast<Receiver&&>(rcvr)}
-      , open_submission{static_cast<open_data&&>(data)}
-      , mode_{mode}
-      , creation_{creation}
-      , caching_{caching} {
+      , open_submission{static_cast<open_data&&>(data)} {
     }
 
     void prepare_submission(::io_uring_sqe& sqe) noexcept {
@@ -62,18 +53,12 @@ namespace sio::event_loop::iouring {
         return;
       }
       if (cqe.res >= 0) {
-        State state{this->context, cqe.res, mode_, creation_, caching_};
-        stdexec::set_value(std::move(*this).receiver(), std::move(state));
+        stdexec::set_value(std::move(*this).receiver(), State{cqe.res});
       } else {
         auto ec = std::error_code(-cqe.res, std::system_category());
         stdexec::set_error(std::move(*this).receiver(), std::move(ec));
       }
     }
-
-   private:
-    async::mode mode_{};
-    async::creation creation_{};
-    async::caching caching_{};
   };
 
   template <class State>
@@ -87,19 +72,11 @@ namespace sio::event_loop::iouring {
 
     io_context* context_{};
     open_data data_;
-    async::mode mode_{async::mode::read};
-    async::creation creation_{async::creation::open_existing};
-    async::caching caching_{async::caching::unchanged};
 
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return file_open_operation<Receiver, State>{
-        open_data{data_},
-        *context_,
-        mode_,
-        creation_,
-        caching_,
-        static_cast<Receiver&&>(receiver)};
+        open_data{data_}, *context_, static_cast<Receiver&&>(receiver)};
     }
 
     env get_env() const noexcept {

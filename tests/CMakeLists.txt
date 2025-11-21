@@ -16,6 +16,9 @@ endif()
 if (TARGET sio::sio_backend_iouring)
   list(APPEND SIO_TEST_BACKEND_LIBRARIES sio::sio_backend_iouring)
 endif()
+if (TARGET sio::sio_backend_epoll)
+  list(APPEND SIO_TEST_BACKEND_LIBRARIES sio::sio_backend_epoll)
+endif()
 
 if (SIO_TEST_BACKEND_LIBRARIES STREQUAL "")
   message(FATAL_ERROR "Tests require at least one sio backend to be enabled.")
@@ -24,6 +27,7 @@ endif()
 set(SIO_TEST_DEFINES
   SIO_TEST_HAS_STDEXEC=$<BOOL:${SIO_ENABLE_BACKEND_STDEXEC}>
   SIO_TEST_HAS_IOURING=$<BOOL:${SIO_ENABLE_BACKEND_IOURING}>
+  SIO_TEST_HAS_EPOLL=$<BOOL:${SIO_ENABLE_BACKEND_EPOLL}>
 )
 
 function(sio_add_test_target target_name)

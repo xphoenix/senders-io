@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../concepts.hpp"
 #include "./details.h"
 
 namespace sio::event_loop::stdexec_backend {
@@ -39,7 +40,7 @@ namespace sio::event_loop::stdexec_backend {
   struct open_sender {
     using sender_concept = se::sender_t;
     using completion_signatures = se::completion_signatures<
-      se::set_value_t(socket_state<Protocol>),
+      se::set_value_t(socket_fd<Protocol>),
       se::set_error_t(std::error_code)>;
 
     exec::io_uring_context* context_{};
@@ -68,9 +69,9 @@ namespace sio::event_loop::stdexec_backend {
       se::set_error(
         static_cast<Receiver&&>(receiver_), std::error_code(errno, std::system_category()));
     } else {
-      se::set_value(
-        static_cast<Receiver&&>(receiver_),
-        socket_state<Protocol>{*context_, rc, std::move(protocol_)});
+        se::set_value(
+          static_cast<Receiver&&>(receiver_),
+          socket_fd<Protocol>{rc});
     }
   }
 } // namespace sio::event_loop::stdexec_backend

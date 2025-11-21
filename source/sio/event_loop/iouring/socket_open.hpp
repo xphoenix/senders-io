@@ -3,6 +3,7 @@
 #include "context.hpp"
 #include "details.hpp"
 #include "submission_operation.hpp"
+#include "../concepts.hpp"
 
 #include <stdexec/execution.hpp>
 
@@ -41,9 +42,7 @@ namespace sio::event_loop::iouring {
         auto ec = std::error_code(errno, std::system_category());
         stdexec::set_error(std::move(op.receiver_), std::move(ec));
       } else {
-        stdexec::set_value(
-          std::move(op.receiver_),
-          socket_state<Protocol>{*op.context_, fd, std::move(op.protocol_)});
+        stdexec::set_value(std::move(op.receiver_), socket_fd<Protocol>{fd});
       }
     }
 
@@ -58,7 +57,7 @@ namespace sio::event_loop::iouring {
     using sender_concept = stdexec::sender_t;
 
     using completion_signatures = stdexec::completion_signatures<
-      stdexec::set_value_t(socket_state<Protocol>),
+      stdexec::set_value_t(socket_fd<Protocol>),
       stdexec::set_error_t(std::error_code),
       stdexec::set_stopped_t()>;
 

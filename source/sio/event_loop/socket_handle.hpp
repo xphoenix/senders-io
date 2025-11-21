@@ -6,7 +6,6 @@
 
 #include <stdexec/execution.hpp>
 
-#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -17,28 +16,34 @@ namespace sio::event_loop {
     using loop_type = std::remove_cvref_t<Loop>;
     using protocol_type = Protocol;
     using state_type = socket_state_t<loop_type, Protocol>;
-    using buffer_type = typename state_type::buffer_type;
-    using buffers_type = typename state_type::buffers_type;
-    using const_buffer_type = typename state_type::const_buffer_type;
-    using const_buffers_type = typename state_type::const_buffers_type;
+    using buffer_type = sio::mutable_buffer;
+    using buffers_type = sio::mutable_buffer_span;
+    using const_buffer_type = sio::const_buffer;
+    using const_buffers_type = sio::const_buffer_span;
+    using native_handle_type = typename loop_type::native_handle_type;
 
     loop_type* context_{nullptr};
-    std::optional<state_type> state_;
+    state_type state_{};
 
     socket_handle() = default;
 
-    socket_handle(loop_type& context, state_type state) noexcept
+    socket_handle(loop_type& context, state_type&& state) noexcept
       : context_{&context}
-      , state_{std::in_place, static_cast<state_type&&>(state)}
+      , state_{static_cast<state_type&&>(state)}
     {
     }
 
     loop_type& context() const noexcept {
+      SIO_ASSERT(context_ != nullptr);
       return *context_;
     }
 
-    const protocol_type& protocol() const noexcept {
-      return state_->protocol();
+    bool is_open() const noexcept {
+      return state_.is_valid();
+    }
+
+    native_handle_type native_handle() const noexcept {
+      return state().native_handle();
     }
 
     auto close() const noexcept {
@@ -81,11 +86,13 @@ namespace sio::event_loop {
     friend loop_type;
 
     state_type& state() noexcept {
-      return *state_;
+      SIO_ASSERT(is_open());
+      return state_;
     }
 
     const state_type& state() const noexcept {
-      return *state_;
+      SIO_ASSERT(is_open());
+      return state_;
     }
   };
 
@@ -111,8 +118,7 @@ namespace sio::event_loop {
 
     auto open() noexcept {
       return context_.open_socket(protocol_)
-           // once state constructed handle could be made
-           | ::stdexec::then([pc = &context_](state_type state) {
+           | ::stdexec::then([pc = &context_](state_type&& state) {
                return socket_handle<loop_type, protocol_type>{*pc, static_cast<state_type&&>(state)};
              });
     }
@@ -124,34 +130,32 @@ namespace sio::event_loop {
     using loop_type = std::remove_cvref_t<Loop>;
     using protocol_type = Protocol;
     using state_type = acceptor_state_t<loop_type, Protocol>;
+    using native_handle_type = typename loop_type::native_handle_type;
 
     loop_type* context_{nullptr};
     typename Protocol::endpoint endpoint_{};
-    mutable std::optional<state_type> state_;
+    mutable state_type state_{};
 
     acceptor_handle() = default;
 
     acceptor_handle(
       loop_type& context,
-      state_type state,
+      state_type&& state,
       typename Protocol::endpoint endpoint) noexcept
       : context_{&context}
       , endpoint_{endpoint}
-      , state_{std::in_place, static_cast<state_type&&>(state)} {
+      , state_{static_cast<state_type&&>(state)} {
     }
 
     loop_type& context() const noexcept {
+      SIO_ASSERT(context_ != nullptr);
       return *context_;
-    }
-
-    const protocol_type& protocol() const noexcept {
-      return state().protocol();
     }
 
     auto accept_once() const {
       return ::stdexec::then(
         context().accept_once(const_cast<state_type&>(state())),
-        [this](socket_state_t<loop_type, protocol_type> state) {
+        [this](socket_state_t<loop_type, protocol_type>&& state) {
           return socket_handle<loop_type, protocol_type>{
             context(), static_cast<socket_state_t<loop_type, protocol_type>&&>(state)};
         });
@@ -161,15 +165,21 @@ namespace sio::event_loop {
       return context().close(const_cast<state_type&>(state()));
     }
 
+    native_handle_type native_handle() const noexcept {
+      return state().native_handle();
+    }
+
    private:
     friend loop_type;
 
     state_type& state() noexcept {
-      return *state_;
+      SIO_ASSERT(state_.is_valid());
+      return state_;
     }
 
     const state_type& state() const noexcept {
-      return *state_;
+      SIO_ASSERT(state_.is_valid());
+      return state_;
     }
   };
 
@@ -204,7 +214,7 @@ namespace sio::event_loop {
 
     auto open() noexcept {
       return context_.open_acceptor(protocol_, endpoint_)
-           | ::stdexec::then([pc = &context_, ep = endpoint_](state_type state) {
+           | ::stdexec::then([pc = &context_, ep = endpoint_](state_type&& state) {
                return acceptor_handle<loop_type, protocol_type>{*pc, static_cast<state_type&&>(state), ep};
              });
     }

@@ -44,6 +44,7 @@ option(BUILD_TESTING "Build tests" ${PROJECT_IS_TOP_LEVEL})
 option(SIO_EXAMPLES "Build examples" ${PROJECT_IS_TOP_LEVEL})
 option(SIO_ENABLE_BACKEND_STDEXEC "Enable stdexec-backed event loop integration" ON)
 cmake_dependent_option(SIO_ENABLE_BACKEND_IOURING "Enable io_uring-backed event loop integration" ON "SIO_PLATFORM_LINUX" OFF)
+cmake_dependent_option(SIO_ENABLE_BACKEND_EPOLL "Enable epoll-backed event loop integration" ON "SIO_PLATFORM_LINUX" OFF)
 option(SIO_ENABLE_ASAN "Enable address sanitizer" OFF)
 option(SIO_ENABLE_TEST_COVERAGE "Enable compiler instrumentation for coverage reports" OFF)
 
@@ -207,6 +208,35 @@ if (SIO_ENABLE_BACKEND_IOURING)
         source/sio/event_loop/iouring/run_sender.hpp
         source/sio/event_loop/iouring/scheduler.hpp)
   sio_install_backend(sio_backend_iouring iouring_backend_headers)
+endif()
+
+if (SIO_ENABLE_BACKEND_EPOLL)
+  add_library(sio_backend_epoll INTERFACE)
+  add_library(sio::sio_backend_epoll ALIAS sio_backend_epoll)
+  target_link_libraries(
+    sio_backend_epoll
+    INTERFACE
+      sio)
+  target_sources(sio_backend_epoll
+    INTERFACE
+      FILE_SET epoll_backend_headers
+      TYPE HEADERS
+      BASE_DIRS source
+      FILES
+        source/sio/event_loop/epoll/backend.hpp
+        source/sio/event_loop/epoll/context.hpp
+        source/sio/event_loop/epoll/details.hpp
+        source/sio/event_loop/epoll/fd_close.hpp
+        source/sio/event_loop/epoll/fd_read.hpp
+        source/sio/event_loop/epoll/fd_write.hpp
+        source/sio/event_loop/epoll/file_open.hpp
+        source/sio/event_loop/epoll/socket_accept.hpp
+        source/sio/event_loop/epoll/socket_connect.hpp
+        source/sio/event_loop/epoll/socket_open.hpp
+        source/sio/event_loop/epoll/socket_sendmsg.hpp
+        source/sio/event_loop/epoll/run_sender.hpp
+        source/sio/event_loop/epoll/scheduler.hpp)
+  sio_install_backend(sio_backend_epoll epoll_backend_headers)
 endif()
 
 if (BUILD_TESTING)

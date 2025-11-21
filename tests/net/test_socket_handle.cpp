@@ -9,6 +9,7 @@
 #include <exec/finally.hpp>
 #include <exec/when_any.hpp>
 #include <stdexec/execution.hpp>
+#include <sys/socket.h>
 
 using namespace stdexec;
 
@@ -26,7 +27,10 @@ TEMPLATE_LIST_TEST_CASE("socket_handle - Open a socket", "[socket_handle]", SIO_
   sio::event_loop::socket socket{&context, sio::ip::tcp::v4()};
 
   auto sender = let_value(socket.open(), [](auto&& handle) {
-    CHECK(handle.protocol().type() == SOCK_STREAM);
+    int type{};
+    socklen_t length = sizeof(type);
+    REQUIRE(::getsockopt(handle.native_handle(), SOL_SOCKET, SO_TYPE, &type, &length) == 0);
+    CHECK(type == SOCK_STREAM);
     return sio::async::close(handle);
   });
   stdexec::sync_wait(exec::when_any(std::move(sender), context.run()));

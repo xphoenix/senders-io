@@ -42,33 +42,18 @@ namespace sio::event_loop::stdexec_backend {
   struct file_open_operation_base
     : stoppable_op_base<Receiver>
     , open_submission {
-    async::mode mode_;
-    async::creation creation_;
-    async::caching caching_;
 
     file_open_operation_base(
       open_data data,
       exec::io_uring_context& context,
-      async::mode mode,
-      async::creation creation,
-      async::caching caching,
       Receiver&& receiver)
       : stoppable_op_base<Receiver>{context, static_cast<Receiver&&>(receiver)}
-      , open_submission{static_cast<open_data&&>(data)}
-      , mode_{mode}
-      , creation_{creation}
-      , caching_{caching} {
+      , open_submission{static_cast<open_data&&>(data)} {
     }
 
     void complete(const ::io_uring_cqe& cqe) noexcept {
       if (cqe.res >= 0) {
-        State state{
-          this->context(),
-          cqe.res,
-          mode_,
-          creation_,
-          caching_};
-        ::stdexec::set_value(static_cast<Receiver&&>(this->__receiver_), std::move(state));
+        ::stdexec::set_value(static_cast<Receiver&&>(this->__receiver_), State{cqe.res});
       } else {
         SIO_ASSERT(cqe.res < 0);
         ::stdexec::set_error(
@@ -92,21 +77,10 @@ namespace sio::event_loop::stdexec_backend {
 
     exec::io_uring_context* context_{};
     open_data data_{};
-    async::mode mode_{async::mode::read};
-    async::creation creation_{async::creation::open_existing};
-    async::caching caching_{async::caching::unchanged};
 
-    file_open_sender(
-      exec::io_uring_context& context,
-      open_data data,
-      async::mode mode,
-      async::creation creation,
-      async::caching caching) noexcept
+    file_open_sender(exec::io_uring_context& context, open_data data) noexcept
       : context_{&context}
-      , data_{static_cast<open_data&&>(data)}
-      , mode_{mode}
-      , creation_{creation}
-      , caching_{caching} {
+      , data_{static_cast<open_data&&>(data)} {
     }
 
     template <class Receiver>
@@ -115,9 +89,6 @@ namespace sio::event_loop::stdexec_backend {
         std::in_place,
         open_data{data_},
         *context_,
-        mode_,
-        creation_,
-        caching_,
         static_cast<Receiver&&>(rcvr)};
     }
 

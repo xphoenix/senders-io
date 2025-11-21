@@ -9,11 +9,14 @@
 #include "./socket_connect.h"
 #include "./socket_sendmsg.h"
 #include "./socket_accept.h"
+#include "../concepts.hpp"
 
 #include <exec/linux/io_uring_context.hpp>
 #include <stdexec/execution.hpp>
 
+#include <cerrno>
 #include <sys/socket.h>
+#include <unistd.h>
 #include <fcntl.h>
 
 #include <filesystem>
@@ -21,29 +24,22 @@
 #include <utility>
 
 namespace sio::event_loop::stdexec_backend {
-struct fd_state;
-struct file_state;
-struct seekable_file_state;
-template <class Protocol>
-struct socket_state;
-template <class Protocol>
-struct acceptor_state;
 
 class backend {
  public:
- using native_context_type = exec::io_uring_context;
+  using native_context_type = exec::io_uring_context;
+  using native_handle_type = int;
   using env = stdexec_backend::env;
   using close_sender = stdexec_backend::close_sender;
 
-  using fd_state = stdexec_backend::fd_state;
-  using file_state = stdexec_backend::file_state;
-  using seekable_file_state = stdexec_backend::seekable_file_state;
+  using file_state = basic_fd;
+  using seekable_file_state = basic_fd;
 
   template <class Protocol>
-  using socket_state = stdexec_backend::socket_state<Protocol>;
+  using socket_state = socket_fd<Protocol>;
 
   template <class Protocol>
-  using acceptor_state = stdexec_backend::acceptor_state<Protocol>;
+  using acceptor_state = socket_fd<Protocol>;
 
   backend() = default;
 
@@ -75,87 +71,85 @@ class backend {
     context_.request_stop();
   }
 
-  auto close(fd_state& state) noexcept {
-    return close_sender{&state.context(), state.native_handle()};
+  auto close(basic_fd& state) noexcept {
+    return close_sender{&context_, state.native_handle()};
   }
 
-  auto read_some(fd_state& state, sio::mutable_buffer_span buffers) {
-    return stdexec_backend::read_sender{state.context(), buffers, state.native_handle()};
+  auto read_some(basic_fd& state, sio::mutable_buffer_span buffers) {
+    return stdexec_backend::read_sender{context_, buffers, state.native_handle()};
   }
 
-  auto read_some(fd_state& state, sio::mutable_buffer buffer) {
-    return stdexec_backend::read_sender_single{state.context(), buffer, state.native_handle()};
+  auto read_some(basic_fd& state, sio::mutable_buffer buffer) {
+    return stdexec_backend::read_sender_single{context_, buffer, state.native_handle()};
   }
 
-  auto write_some(fd_state& state, sio::const_buffer_span buffers) {
-    return stdexec_backend::write_sender{state.context(), buffers, state.native_handle()};
+  auto write_some(basic_fd& state, sio::const_buffer_span buffers) {
+    return stdexec_backend::write_sender{context_, buffers, state.native_handle()};
   }
 
-  auto write_some(fd_state& state, sio::const_buffer buffer) {
-    return stdexec_backend::write_sender_single{state.context(), buffer, state.native_handle()};
+  auto write_some(basic_fd& state, sio::const_buffer buffer) {
+    return stdexec_backend::write_sender_single{context_, buffer, state.native_handle()};
   }
 
-  auto read(fd_state& state, sio::mutable_buffer_span buffers) {
+  auto read(basic_fd& state, sio::mutable_buffer_span buffers) {
     return reduce(
-      buffered_sequence(stdexec_backend::read_factory{&state.context(), state.native_handle()}, buffers),
+      buffered_sequence(stdexec_backend::read_factory{&context_, state.native_handle()}, buffers),
       0ull);
   }
 
-  auto read(fd_state& state, sio::mutable_buffer buffer) {
+  auto read(basic_fd& state, sio::mutable_buffer buffer) {
     auto buffered =
-      buffered_sequence(stdexec_backend::read_factory{&state.context(), state.native_handle()}, buffer);
+      buffered_sequence(stdexec_backend::read_factory{&context_, state.native_handle()}, buffer);
     return reduce(std::move(buffered), 0ull);
   }
 
-  auto write(fd_state& state, sio::const_buffer_span buffers) {
+  auto write(basic_fd& state, sio::const_buffer_span buffers) {
     return reduce(
-      buffered_sequence(stdexec_backend::write_factory{&state.context(), state.native_handle()}, buffers),
+      buffered_sequence(stdexec_backend::write_factory{&context_, state.native_handle()}, buffers),
       0ull);
   }
 
-  auto write(fd_state& state, sio::const_buffer buffer) {
+  auto write(basic_fd& state, sio::const_buffer buffer) {
     return reduce(
-      buffered_sequence(stdexec_backend::write_factory{&state.context(), state.native_handle()}, buffer),
+      buffered_sequence(stdexec_backend::write_factory{&context_, state.native_handle()}, buffer),
       0ull);
   }
 
   auto read_some(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
-    return stdexec_backend::read_sender{state.context(), buffers, state.native_handle(), offset};
+    return stdexec_backend::read_sender{context_, buffers, state.native_handle(), offset};
   }
 
   auto read_some(seekable_file_state& state, sio::mutable_buffer buffer, ::off_t offset) {
-    return stdexec_backend::read_sender_single{state.context(), buffer, state.native_handle(), offset};
+    return stdexec_backend::read_sender_single{context_, buffer, state.native_handle(), offset};
   }
 
   auto write_some(seekable_file_state& state, sio::const_buffer_span buffers, ::off_t offset) {
-    return stdexec_backend::write_sender{state.context(), buffers, state.native_handle(), offset};
+    return stdexec_backend::write_sender{context_, buffers, state.native_handle(), offset};
   }
 
   auto write_some(seekable_file_state& state, sio::const_buffer buffer, ::off_t offset) {
-    return stdexec_backend::write_sender_single{state.context(), buffer, state.native_handle(), offset};
+    return stdexec_backend::write_sender_single{context_, buffer, state.native_handle(), offset};
   }
 
   auto read(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
     return reduce(
       buffered_sequence(
-        stdexec_backend::read_factory{&state.context(), state.native_handle()},
+        stdexec_backend::read_factory{&context_, state.native_handle()},
         buffers,
         offset),
       0ull);
   }
 
   auto read(seekable_file_state& state, sio::mutable_buffer buffer, ::off_t offset) {
-    auto buffered = buffered_sequence(
-      stdexec_backend::read_factory{&state.context(), state.native_handle()},
-      buffer,
-      offset);
+    auto buffered =
+      buffered_sequence(stdexec_backend::read_factory{&context_, state.native_handle()}, buffer, offset);
     return reduce(std::move(buffered), 0ull);
   }
 
   auto write(seekable_file_state& state, sio::const_buffer_span buffers, ::off_t offset) {
     return reduce(
       buffered_sequence(
-        stdexec_backend::write_factory{&state.context(), state.native_handle()},
+        stdexec_backend::write_factory{&context_, state.native_handle()},
         buffers,
         offset),
       0ull);
@@ -164,7 +158,7 @@ class backend {
   auto write(seekable_file_state& state, sio::const_buffer buffer, ::off_t offset) {
     return reduce(
       buffered_sequence(
-        stdexec_backend::write_factory{&state.context(), state.native_handle()},
+        stdexec_backend::write_factory{&context_, state.native_handle()},
         buffer,
         offset),
       0ull);
@@ -183,10 +177,7 @@ class backend {
       to_mode(mode)};
     return stdexec_backend::file_open_sender<file_state>{
       context_,
-      static_cast<stdexec_backend::open_data&&>(data),
-      mode,
-      creation,
-      caching};
+      static_cast<stdexec_backend::open_data&&>(data)};
   }
 
   auto open_seekable_file(
@@ -202,10 +193,7 @@ class backend {
       to_mode(mode)};
     return stdexec_backend::file_open_sender<seekable_file_state>{
       context_,
-      static_cast<stdexec_backend::open_data&&>(data),
-      mode,
-      creation,
-      caching};
+      static_cast<stdexec_backend::open_data&&>(data)};
   }
 
   template <class Protocol>
@@ -215,85 +203,84 @@ class backend {
 
   template <class Protocol>
   auto connect(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
-    return stdexec_backend::connect_sender<Protocol>{&state, endpoint};
+    return stdexec_backend::connect_sender<Protocol>{&context_, state.native_handle(), endpoint};
   }
 
   template <class Protocol>
   void bind(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
-    state.bind(endpoint);
+    auto addr = reinterpret_cast<const sockaddr*>(endpoint.data());
+    if (::bind(state.native_handle(), addr, endpoint.size()) == -1) {
+      throw std::system_error(errno, std::system_category());
+    }
   }
 
   template <class Protocol>
-  auto read_some(
-    socket_state<Protocol>& state,
-    typename socket_state<Protocol>::buffers_type buffers) {
-    return read_some(static_cast<fd_state&>(state), buffers);
+  auto read_some(socket_state<Protocol>& state, sio::mutable_buffer_span buffers) {
+    return read_some(static_cast<basic_fd&>(state), buffers);
   }
 
   template <class Protocol>
-  auto read_some(socket_state<Protocol>& state, typename socket_state<Protocol>::buffer_type buffer) {
-    return read_some(static_cast<fd_state&>(state), buffer);
+  auto read_some(socket_state<Protocol>& state, sio::mutable_buffer buffer) {
+    return read_some(static_cast<basic_fd&>(state), buffer);
   }
 
   template <class Protocol>
-  auto write_some(
-    socket_state<Protocol>& state,
-    typename socket_state<Protocol>::const_buffers_type buffers) {
-    return write_some(static_cast<fd_state&>(state), buffers);
+  auto write_some(socket_state<Protocol>& state, sio::const_buffer_span buffers) {
+    return write_some(static_cast<basic_fd&>(state), buffers);
   }
 
   template <class Protocol>
-  auto write_some(
-    socket_state<Protocol>& state,
-    typename socket_state<Protocol>::const_buffer_type buffer) {
-    return write_some(static_cast<fd_state&>(state), buffer);
+  auto write_some(socket_state<Protocol>& state, sio::const_buffer buffer) {
+    return write_some(static_cast<basic_fd&>(state), buffer);
   }
 
   template <class Protocol>
-  auto write(
-    socket_state<Protocol>& state,
-    typename socket_state<Protocol>::const_buffers_type buffers) {
-    return write(static_cast<fd_state&>(state), buffers);
+  auto write(socket_state<Protocol>& state, sio::const_buffer_span buffers) {
+    return write(static_cast<basic_fd&>(state), buffers);
   }
 
   template <class Protocol>
-  auto write(
-    socket_state<Protocol>& state,
-    typename socket_state<Protocol>::const_buffer_type buffer) {
-    return write(static_cast<fd_state&>(state), buffer);
+  auto write(socket_state<Protocol>& state, sio::const_buffer buffer) {
+    return write(static_cast<basic_fd&>(state), buffer);
   }
 
   template <class Protocol>
   auto open_acceptor(Protocol protocol, typename Protocol::endpoint endpoint) {
     return ::stdexec::then(
       open_socket(protocol),
-      [this, endpoint](stdexec_backend::socket_state<Protocol> state) mutable {
-        Protocol proto = state.consume_protocol();
+      [this, endpoint = std::move(endpoint)](socket_state<Protocol> state) mutable {
+        int fd = state.native_handle();
         int one = 1;
-        if (::setsockopt(
-              state.native_handle(),
-              SOL_SOCKET,
-              SO_REUSEADDR,
-              &one,
-              static_cast<socklen_t>(sizeof(int)))
-            == -1) {
-          throw std::system_error(errno, std::system_category());
+        if (
+          ::setsockopt(
+            fd,
+            SOL_SOCKET,
+            SO_REUSEADDR,
+            &one,
+            static_cast<socklen_t>(sizeof(one)))
+          == -1) {
+          int err = errno;
+          ::close(fd);
+          throw std::system_error(err, std::system_category());
         }
-        state.bind(endpoint);
-        if (::listen(state.native_handle(), 16) == -1) {
-          throw std::system_error(errno, std::system_category());
+        auto addr = reinterpret_cast<const sockaddr*>(endpoint.data());
+        if (::bind(fd, addr, endpoint.size()) == -1) {
+          int err = errno;
+          ::close(fd);
+          throw std::system_error(err, std::system_category());
         }
-        return stdexec_backend::acceptor_state<Protocol>{
-          context_,
-          state.native_handle(),
-          std::move(proto),
-          std::move(endpoint)};
+        if (::listen(fd, 16) == -1) {
+          int err = errno;
+          ::close(fd);
+          throw std::system_error(err, std::system_category());
+        }
+        return acceptor_state<Protocol>{fd};
       });
   }
 
   template <class Protocol>
   auto accept_once(acceptor_state<Protocol>& state) {
-    return stdexec_backend::accept_sender<Protocol>{&state};
+    return stdexec_backend::accept_sender<Protocol>{&context_, state.native_handle()};
   }
 
  private:

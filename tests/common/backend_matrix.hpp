@@ -16,6 +16,10 @@
 #include "sio/event_loop/iouring/backend.hpp"
 #endif
 
+#if SIO_TEST_HAS_EPOLL
+#include "sio/event_loop/epoll/backend.hpp"
+#endif
+
 #define SIO_TEST_BACKEND_TYPES ::sio::test::available_backend_tuple
 
 namespace sio::test {
@@ -125,9 +129,40 @@ namespace sio::test {
   };
 #endif
 
+#if SIO_TEST_HAS_EPOLL
+  struct epoll_backend {
+    static constexpr std::string_view name = "epoll";
+    static constexpr bool available = false; // TODO: re-enable after epoll token refactor completes.
+
+    using loop_type = sio::event_loop::epoll::backend;
+    using native_context_type = typename loop_type::native_context_type;
+    using run_mode = sio::event_loop::epoll::run_mode;
+    using read_factory = sio::event_loop::epoll::fd_read_factory;
+    using write_factory = sio::event_loop::epoll::fd_write_factory;
+
+    static loop_type make_loop() {
+      return loop_type{};
+    }
+
+    template <stdexec::sender Sender>
+    static void sync_wait(loop_type& loop, Sender&& sender) {
+      auto guard = exec::when_any(
+        std::forward<Sender>(sender), loop.run(sio::event_loop::epoll::run_mode::stopped));
+      stdexec::sync_wait(std::move(guard));
+    }
+  };
+#else
+  struct epoll_backend {
+    static constexpr std::string_view name = "epoll";
+    static constexpr bool available = false;
+    using loop_type = void;
+  };
+#endif
+
   using available_backends = TypeList<
     std::conditional_t<stdexec_backend::available, stdexec_backend, void>,
-    std::conditional_t<iouring_backend::available, iouring_backend, void>>;
+    std::conditional_t<iouring_backend::available, iouring_backend, void>,
+    std::conditional_t<epoll_backend::available, epoll_backend, void>>;
 
   using enabled_backends = typename detail::filter_void<available_backends>::type;
   using available_backend_tuple = typename detail::to_tuple<enabled_backends>::type;

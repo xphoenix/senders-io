@@ -2,6 +2,7 @@
 
 #include <stdexec/execution.hpp>
 
+#include "../assert.hpp"
 #include "../const_buffer.hpp"
 #include "../const_buffer_span.hpp"
 #include "../mutable_buffer.hpp"
@@ -13,6 +14,29 @@
 #include <utility>
 
 namespace sio::event_loop {
+  struct basic_fd {
+    int fd{-1};
+
+    constexpr basic_fd() = default;
+    constexpr explicit basic_fd(int value) noexcept
+      : fd{value} {
+    }
+
+    constexpr bool is_valid() const noexcept {
+      return fd >= 0;
+    }
+
+    constexpr int native_handle() const noexcept {
+      SIO_ASSERT(is_valid());
+      return fd;
+    }
+  };
+
+  template <class Protocol>
+  struct socket_fd : basic_fd {
+    using basic_fd::basic_fd;
+  };
+
   template <class Loop>
   concept base_loop = requires(Loop& loop) {
     { loop.get_scheduler() } -> stdexec::scheduler;
@@ -52,38 +76,23 @@ namespace sio::event_loop {
         loop.bind(socket_state, endpoint)
       };
       {
-        loop.read_some(
-          socket_state,
-          std::declval<typename socket_state_t<Loop, Protocol>::buffers_type>())
+        loop.read_some(socket_state, sio::mutable_buffer_span{})
       };
       {
-        loop.read_some(
-          socket_state,
-          std::declval<typename socket_state_t<Loop, Protocol>::buffer_type>())
+        loop.read_some(socket_state, sio::mutable_buffer{})
       };
       {
-        loop.write_some(
-          socket_state,
-          std::declval<typename socket_state_t<Loop, Protocol>::const_buffers_type>())
+        loop.write_some(socket_state, sio::const_buffer_span{})
       };
       {
-        loop.write_some(
-          socket_state,
-          std::declval<typename socket_state_t<Loop, Protocol>::const_buffer_type>())
+        loop.write_some(socket_state, sio::const_buffer{})
       };
       {
-        loop.write(
-          socket_state,
-          std::declval<typename socket_state_t<Loop, Protocol>::const_buffers_type>())
+        loop.write(socket_state, sio::const_buffer_span{})
       };
       {
-        loop.write(
-          socket_state,
-          std::declval<typename socket_state_t<Loop, Protocol>::const_buffer_type>())
+        loop.write(socket_state, sio::const_buffer{})
       };
-      {
-        socket_state.protocol()
-      } -> std::same_as<const Protocol&>;
     };
 
   template <class Loop>
@@ -131,3 +140,48 @@ namespace sio::event_loop {
       loop.write(state, const_buffer, offset);
     };
 } // namespace sio::event_loop
+
+namespace sio {
+  namespace get_native_handle_ {
+    template <class Tp>
+    concept has_member_cpo = requires(Tp&& t) {
+      static_cast<Tp&&>(t).native_handle();
+    };
+
+    template <class Tp>
+    concept nothrow_has_member_cpo = requires(Tp&& t) {
+      { static_cast<Tp&&>(t).native_handle() } noexcept;
+    };
+
+    template <class Tp>
+    concept has_static_member_cpo = requires(Tp&& t) {
+      std::decay_t<Tp>::native_handle(static_cast<Tp&&>(t));
+    };
+
+    template <class Tp>
+    concept nothrow_has_static_member_cpo = requires(Tp&& t) {
+      { std::decay_t<Tp>::native_handle(static_cast<Tp&&>(t)) } noexcept;
+    };
+
+    template <class Tp>
+    concept has_customization = has_member_cpo<Tp> || has_static_member_cpo<Tp>;
+
+    template <class Tp>
+    concept nothrow_has_customization =
+      nothrow_has_member_cpo<Tp> || nothrow_has_static_member_cpo<Tp>;
+
+    struct get_native_handle_t {
+      template <class Tp>
+        requires has_customization<Tp>
+      auto operator()(Tp&& t) const noexcept(nothrow_has_customization<Tp>) {
+        if constexpr (has_member_cpo<Tp>) {
+          return static_cast<Tp&&>(t).native_handle();
+        } else {
+          return std::decay_t<Tp>::native_handle(static_cast<Tp&&>(t));
+        }
+      }
+    };
+  } // namespace get_native_handle_
+
+  inline constexpr get_native_handle_::get_native_handle_t get_native_handle{};
+} // namespace sio

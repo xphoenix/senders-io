@@ -44,6 +44,8 @@ task<void>
 }
 
 int main() {
+  // TODO(#??): Re-enable once a public API for adopting existing descriptors exists.
+#if 0
   using backend = sio::event_loop::stdexec_backend::backend;
   backend loop{};
   auto out = sio::event_loop::file_handle<backend>::adopt(
@@ -54,6 +56,7 @@ int main() {
     loop,
     STDIN_FILENO,
     sio::async::mode::read);
-
   stdexec::sync_wait(exec::when_any(echo(std::move(in), std::move(out)), loop.run()));
+#endif
+  return 0;
 }

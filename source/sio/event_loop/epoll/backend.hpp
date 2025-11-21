@@ -1,6 +1,7 @@
 #pragma once
 
 #include "context.hpp"
+#include "details.hpp"
 #include "fd_close.hpp"
 #include "fd_read.hpp"
 #include "fd_write.hpp"
@@ -11,7 +12,6 @@
 #include "socket_connect.hpp"
 #include "socket_open.hpp"
 #include "socket_sendmsg.hpp"
-#include "../concepts.hpp"
 
 #include "../../sequence/buffered_sequence.hpp"
 #include "../../sequence/reduce.hpp"
@@ -19,42 +19,30 @@
 #include <stdexec/execution.hpp>
 
 #include <cerrno>
-#include <fcntl.h>
-#include <unistd.h>
 #include <filesystem>
 #include <system_error>
 #include <utility>
 
+#include <fcntl.h>
 #include <sys/socket.h>
 
-namespace sio::event_loop::iouring {
+namespace sio::event_loop::epoll {
   class backend {
    public:
-    using native_context_type = io_context;
+    using native_context_type = context;
     using native_handle_type = int;
-    using env = iouring::env;
-    using file_state = basic_fd;
-    using seekable_file_state = basic_fd;
-
-    using fd_close_sender = iouring::fd_close_sender;
-    using fd_read_sender_span = iouring::fd_read_sender_span;
-    using fd_read_sender_single = iouring::fd_read_sender_single;
-    using fd_read_factory = iouring::fd_read_factory;
-    using fd_write_sender_span = iouring::fd_write_sender_span;
-    using fd_write_sender_single = iouring::fd_write_sender_single;
-    using fd_write_factory = iouring::fd_write_factory;
+    using env = epoll::env;
+    using fd_state = epoll::fd_state;
+    using file_state = epoll::file_state;
+    using seekable_file_state = epoll::seekable_file_state;
 
     template <class Protocol>
-    using socket_state = socket_fd<Protocol>;
+    using socket_state = epoll::socket_state<Protocol>;
 
     template <class Protocol>
-    using acceptor_state = socket_fd<Protocol>;
+    using acceptor_state = epoll::acceptor_state<Protocol>;
 
     backend() = default;
-
-    explicit backend(unsigned int queue_depth)
-      : context_{queue_depth} {
-    }
 
     scheduler get_scheduler() noexcept {
       return context_.get_scheduler();
@@ -80,88 +68,85 @@ namespace sio::event_loop::iouring {
       context_.request_stop();
     }
 
-    auto close(basic_fd& state) noexcept {
-      return fd_close_sender{&context_, state.native_handle()};
+    auto close(fd_state& state) noexcept {
+      return fd_close_sender{&state.ctx(), state.native_handle()};
     }
 
-    auto read_some(basic_fd& state, sio::mutable_buffer_span buffers) {
-      return fd_read_sender_span{context_, buffers, state.native_handle()};
+    auto read_some(fd_state& state, sio::mutable_buffer_span buffers) {
+      return fd_read_sender_span{state, buffers};
     }
 
-    auto read_some(basic_fd& state, sio::mutable_buffer buffer) {
-      return fd_read_sender_single{context_, buffer, state.native_handle()};
+    auto read_some(fd_state& state, sio::mutable_buffer buffer) {
+      return fd_read_sender_single{state, buffer};
     }
 
-    auto write_some(basic_fd& state, sio::const_buffer_span buffers) {
-      return fd_write_sender_span{context_, buffers, state.native_handle()};
+    auto write_some(fd_state& state, sio::const_buffer_span buffers) {
+      return fd_write_sender_span{state, buffers};
     }
 
-    auto write_some(basic_fd& state, sio::const_buffer buffer) {
-      return fd_write_sender_single{context_, buffer, state.native_handle()};
+    auto write_some(fd_state& state, sio::const_buffer buffer) {
+      return fd_write_sender_single{state, buffer};
     }
 
-    auto read(basic_fd& state, sio::mutable_buffer_span buffers) {
+    auto read(fd_state& state, sio::mutable_buffer_span buffers) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(fd_read_factory{&context_, state.native_handle()}, buffers), 0ull);
-    }
-
-    auto read(basic_fd& state, sio::mutable_buffer buffer) {
-      auto buffered = ::sio::buffered_sequence(
-        fd_read_factory{&context_, state.native_handle()}, buffer);
-      return ::sio::reduce(std::move(buffered), 0ull);
-    }
-
-    auto write(basic_fd& state, sio::const_buffer_span buffers) {
-      return ::sio::reduce(
-        ::sio::buffered_sequence(fd_write_factory{&context_, state.native_handle()}, buffers),
+        ::sio::buffered_sequence(fd_read_factory{&state}, buffers),
         0ull);
     }
 
-    auto write(basic_fd& state, sio::const_buffer buffer) {
+    auto read(fd_state& state, sio::mutable_buffer buffer) {
+      auto buffered = ::sio::buffered_sequence(fd_read_factory{&state}, buffer);
+      return ::sio::reduce(std::move(buffered), 0ull);
+    }
+
+    auto write(fd_state& state, sio::const_buffer_span buffers) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(fd_write_factory{&context_, state.native_handle()}, buffer), 0ull);
+        ::sio::buffered_sequence(fd_write_factory{&state}, buffers),
+        0ull);
+    }
+
+    auto write(fd_state& state, sio::const_buffer buffer) {
+      return ::sio::reduce(
+        ::sio::buffered_sequence(fd_write_factory{&state}, buffer),
+        0ull);
     }
 
     auto read_some(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
-      return fd_read_sender_span{context_, buffers, state.native_handle(), offset};
+      return fd_read_sender_span{state, buffers, offset};
     }
 
     auto read_some(seekable_file_state& state, sio::mutable_buffer buffer, ::off_t offset) {
-      return fd_read_sender_single{context_, buffer, state.native_handle(), offset};
+      return fd_read_sender_single{state, buffer, offset};
     }
 
     auto write_some(seekable_file_state& state, sio::const_buffer_span buffers, ::off_t offset) {
-      return fd_write_sender_span{context_, buffers, state.native_handle(), offset};
+      return fd_write_sender_span{state, buffers, offset};
     }
 
     auto write_some(seekable_file_state& state, sio::const_buffer buffer, ::off_t offset) {
-      return fd_write_sender_single{context_, buffer, state.native_handle(), offset};
+      return fd_write_sender_single{state, buffer, offset};
     }
 
     auto read(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(
-          fd_read_factory{&context_, state.native_handle()}, buffers, offset),
+        ::sio::buffered_sequence(fd_read_factory{&state}, buffers, offset),
         0ull);
     }
 
     auto read(seekable_file_state& state, sio::mutable_buffer buffer, ::off_t offset) {
-      auto buffered = ::sio::buffered_sequence(
-        fd_read_factory{&context_, state.native_handle()}, buffer, offset);
+      auto buffered = ::sio::buffered_sequence(fd_read_factory{&state}, buffer, offset);
       return ::sio::reduce(std::move(buffered), 0ull);
     }
 
     auto write(seekable_file_state& state, sio::const_buffer_span buffers, ::off_t offset) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(
-          fd_write_factory{&context_, state.native_handle()}, buffers, offset),
+        ::sio::buffered_sequence(fd_write_factory{&state}, buffers, offset),
         0ull);
     }
 
     auto write(seekable_file_state& state, sio::const_buffer buffer, ::off_t offset) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(
-          fd_write_factory{&context_, state.native_handle()}, buffer, offset),
+        ::sio::buffered_sequence(fd_write_factory{&state}, buffer, offset),
         0ull);
     }
 
@@ -176,7 +161,7 @@ namespace sio::event_loop::iouring {
         dirfd,
         to_open_flags(mode, creation),
         to_mode(mode)};
-      return file_open_sender<file_state>{&context_, static_cast<open_data&&>(data)};
+      return file_open_sender<file_state>{&context_, static_cast<open_data&&>(data), mode, creation, caching};
     }
 
     auto open_seekable_file(
@@ -190,7 +175,8 @@ namespace sio::event_loop::iouring {
         dirfd,
         to_open_flags(mode, creation),
         to_mode(mode)};
-      return file_open_sender<seekable_file_state>{&context_, static_cast<open_data&&>(data)};
+      return file_open_sender<seekable_file_state>{
+        &context_, static_cast<open_data&&>(data), mode, creation, caching};
     }
 
     template <class Protocol>
@@ -202,51 +188,48 @@ namespace sio::event_loop::iouring {
     auto open_acceptor(Protocol protocol, typename Protocol::endpoint endpoint) {
       return ::stdexec::then(
         open_socket(protocol),
-        [this, endpoint = std::move(endpoint)](socket_state<Protocol> state) mutable {
-          int fd = state.native_handle();
+        [this, endpoint](socket_state<Protocol> state) mutable {
+          Protocol proto = state.consume_protocol();
           int one = 1;
           if (
-            ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, static_cast<socklen_t>(sizeof(one)))
+            ::setsockopt(
+              state.native_handle(),
+              SOL_SOCKET,
+              SO_REUSEADDR,
+              &one,
+              static_cast<socklen_t>(sizeof(one)))
             == -1) {
-            int err = errno;
-            ::close(fd);
-            throw std::system_error(err, std::system_category());
+            throw std::system_error(errno, std::system_category());
           }
-          auto addr = reinterpret_cast<const sockaddr*>(endpoint.data());
-          if (::bind(fd, addr, endpoint.size()) == -1) {
-            int err = errno;
-            ::close(fd);
-            throw std::system_error(err, std::system_category());
+          state.bind(endpoint);
+          if (::listen(state.native_handle(), 16) == -1) {
+            throw std::system_error(errno, std::system_category());
           }
-          if (::listen(fd, 16) == -1) {
-            int err = errno;
-            ::close(fd);
-            throw std::system_error(err, std::system_category());
-          }
-          return acceptor_state<Protocol>{fd};
+          return acceptor_state<Protocol>{context_, state.native_handle(), std::move(proto), std::move(endpoint)};
         });
     }
 
     template <class Protocol>
     auto connect(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
-      return socket_connect_sender<Protocol>{&context_, state.native_handle(), endpoint};
+      return socket_connect_sender<Protocol>{&state, endpoint};
     }
 
     template <class Protocol>
     void bind(socket_state<Protocol>& state, typename Protocol::endpoint endpoint) {
-      auto addr = reinterpret_cast<const sockaddr*>(endpoint.data());
-      if (::bind(state.native_handle(), addr, endpoint.size()) == -1) {
-        throw std::system_error(errno, std::system_category());
-      }
+      state.bind(endpoint);
     }
 
     template <class Protocol>
     auto accept_once(acceptor_state<Protocol>& state) {
-      return socket_accept_sender<Protocol>{&context_, state.native_handle()};
+      return socket_accept_sender<Protocol>{&state};
+    }
+
+    template <class Protocol>
+    auto sendmsg(socket_state<Protocol>& state, ::msghdr msg) {
+      return socket_sendmsg_sender<Protocol>{&state, msg};
     }
 
    private:
-    // TODO(andrphi): Move into utils.h
     static int to_open_flags(async::mode mode, async::creation creation) noexcept {
       int flags = O_CLOEXEC;
       switch (mode) {
@@ -283,7 +266,6 @@ namespace sio::event_loop::iouring {
       return flags;
     }
 
-    // TODO(andrphi): Move into utils.h
     static ::mode_t to_mode(async::mode mode) noexcept {
       switch (mode) {
       case async::mode::write:
@@ -297,4 +279,4 @@ namespace sio::event_loop::iouring {
 
     native_context_type context_{};
   };
-} // namespace sio::event_loop::iouring
+} // namespace sio::event_loop::epoll

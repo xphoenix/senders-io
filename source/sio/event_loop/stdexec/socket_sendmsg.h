@@ -7,15 +7,18 @@ namespace sio::event_loop::stdexec_backend {
 
   template <class Protocol, class Receiver>
   struct sendmsg_operation_base : stoppable_op_base<Receiver> {
-    socket_state<Protocol>* state_{};
+    exec::io_uring_context* context_{};
+    int fd_{-1};
     ::msghdr msg_;
 
     sendmsg_operation_base(
-      socket_state<Protocol>& state,
+      exec::io_uring_context& context,
+      int fd,
       Receiver rcvr,
       ::msghdr msg)
-      : stoppable_op_base<Receiver>{state.context(), static_cast<Receiver&&>(rcvr)}
-      , state_{&state}
+      : stoppable_op_base<Receiver>{context, static_cast<Receiver&&>(rcvr)}
+      , context_{&context}
+      , fd_{fd}
       , msg_{msg} {
     }
 
@@ -26,7 +29,7 @@ namespace sio::event_loop::stdexec_backend {
     void submit(::io_uring_sqe& sqe) noexcept {
       ::io_uring_sqe sqe_{};
       sqe_.opcode = IORING_OP_SENDMSG;
-      sqe_.fd = state_->native_handle();
+      sqe_.fd = fd_;
       sqe_.addr = std::bit_cast<__u64>(&msg_);
       sqe = sqe_;
     }
@@ -54,7 +57,8 @@ namespace sio::event_loop::stdexec_backend {
       se::set_error_t(std::error_code),
       se::set_stopped_t()>;
 
-    socket_state<Protocol>* state_{};
+    exec::io_uring_context* context_{};
+    int fd_{-1};
     ::msghdr msg_{};
 
     template <class Receiver>
@@ -62,13 +66,14 @@ namespace sio::event_loop::stdexec_backend {
       -> sendmsg_operation<Protocol, Receiver> {
       return {
         std::in_place,
-        *state_,
+        *context_,
+        fd_,
         static_cast<Receiver&&>(rcvr),
         msg_};
     }
 
     env get_env() const noexcept {
-      return {state_->context().get_scheduler()};
+      return {context_->get_scheduler()};
     }
   };
 

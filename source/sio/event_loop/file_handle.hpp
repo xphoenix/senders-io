@@ -9,7 +9,6 @@
 #include <fcntl.h>
 
 #include <filesystem>
-#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -23,19 +22,29 @@ namespace sio::event_loop {
     using buffers_type = sio::mutable_buffer_span;
     using const_buffer_type = sio::const_buffer;
     using const_buffers_type = sio::const_buffer_span;
+    using native_handle_type = typename loop_type::native_handle_type;
 
     loop_type* context_{nullptr};
-    std::optional<state_type> state_{};
+    state_type state_{};
 
     file_handle() = default;
 
-    file_handle(loop_type& context, state_type state) noexcept
+    file_handle(loop_type& context, state_type&& state) noexcept
       : context_{&context}
-      , state_{std::in_place, static_cast<state_type&&>(state)} {
+      , state_{static_cast<state_type&&>(state)} {
     }
 
     loop_type& context() const noexcept {
+      SIO_ASSERT(context_ != nullptr);
       return *context_;
+    }
+
+    bool is_open() const noexcept {
+      return state_.is_valid();
+    }
+
+    native_handle_type native_handle() const noexcept {
+      return state().native_handle();
     }
 
     auto close() {
@@ -74,26 +83,17 @@ namespace sio::event_loop {
       return context().write(const_cast<state_type&>(state()), buffer);
     }
 
-    static file_handle adopt(
-      loop_type& context,
-      int fd,
-      async::mode mode = async::mode::read,
-      async::creation creation = async::creation::open_existing,
-      async::caching caching = async::caching::unchanged) {
-      return file_handle{
-        context,
-        state_type{context.native_context(), fd, mode, creation, caching}};
-    }
-
   private:
     friend loop_type;
 
     state_type& state() noexcept {
-      return *state_;
+      SIO_ASSERT(is_open());
+      return state_;
     }
 
     const state_type& state() const noexcept {
-      return *state_;
+      SIO_ASSERT(is_open());
+      return state_;
     }
   };
 
@@ -107,19 +107,29 @@ namespace sio::event_loop {
     using const_buffer_type = sio::const_buffer;
     using const_buffers_type = sio::const_buffer_span;
     using offset_type = ::off_t;
+    using native_handle_type = typename loop_type::native_handle_type;
 
     loop_type* context_{nullptr};
-    std::optional<state_type> state_{};
+    state_type state_{};
 
     seekable_file_handle() = default;
 
-    seekable_file_handle(loop_type& context, state_type state) noexcept
+    seekable_file_handle(loop_type& context, state_type&& state) noexcept
       : context_{&context}
-      , state_{std::in_place, static_cast<state_type&&>(state)} {
+      , state_{static_cast<state_type&&>(state)} {
     }
 
     loop_type& context() const noexcept {
+      SIO_ASSERT(context_ != nullptr);
       return *context_;
+    }
+
+    bool is_open() const noexcept {
+      return state_.is_valid();
+    }
+
+    native_handle_type native_handle() const noexcept {
+      return state().native_handle();
     }
 
     auto close() {
@@ -190,26 +200,17 @@ namespace sio::event_loop {
       return context().write(const_cast<state_type&>(state()), buffer, offset);
     }
 
-    static seekable_file_handle adopt(
-      loop_type& context,
-      int fd,
-      async::mode mode = async::mode::read,
-      async::creation creation = async::creation::open_existing,
-      async::caching caching = async::caching::unchanged) {
-      return seekable_file_handle{
-        context,
-        state_type{context.native_context(), fd, mode, creation, caching}};
-    }
-
   private:
     friend loop_type;
 
     state_type& state() noexcept {
-      return *state_;
+      SIO_ASSERT(is_open());
+      return state_;
     }
 
     const state_type& state() const noexcept {
-      return *state_;
+      SIO_ASSERT(is_open());
+      return state_;
     }
   };
 
@@ -254,7 +255,7 @@ namespace sio::event_loop {
     auto open() noexcept {
       return ::stdexec::then(
         context_.open_file(path_, mode_, creation_, caching_, dirfd_),
-        [this](state_type state) {
+        [this](state_type&& state) {
           return handle_type{context_, static_cast<state_type&&>(state)};
         });
     }
@@ -303,7 +304,7 @@ namespace sio::event_loop {
     auto open() noexcept {
       return ::stdexec::then(
         context_.open_seekable_file(path_, mode_, creation_, caching_, dirfd_),
-        [this](state_type state) {
+        [this](state_type&& state) {
           return handle_type{context_, static_cast<state_type&&>(state)};
         });
     }

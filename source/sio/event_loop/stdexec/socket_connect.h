@@ -6,15 +6,18 @@ namespace sio::event_loop::stdexec_backend {
   namespace se = ::stdexec;
   template <class Protocol, class Receiver>
   struct connect_operation_base : stoppable_op_base<Receiver> {
-    socket_state<Protocol>* state_{};
+    exec::io_uring_context* context_{};
+    int fd_{-1};
     typename Protocol::endpoint peer_endpoint_;
 
     connect_operation_base(
-      socket_state<Protocol>& state,
+      exec::io_uring_context& context,
+      int fd,
       typename Protocol::endpoint peer_endpoint,
       Receiver rcvr) noexcept
-      : stoppable_op_base<Receiver>{state.context(), static_cast<Receiver&&>(rcvr)}
-      , state_{&state}
+      : stoppable_op_base<Receiver>{context, static_cast<Receiver&&>(rcvr)}
+      , context_{&context}
+      , fd_{fd}
       , peer_endpoint_{peer_endpoint} {
     }
 
@@ -25,7 +28,7 @@ namespace sio::event_loop::stdexec_backend {
     void submit(::io_uring_sqe& sqe) noexcept {
       ::io_uring_sqe sqe_{};
       sqe_.opcode = IORING_OP_CONNECT;
-      sqe_.fd = state_->native_handle();
+      sqe_.fd = fd_;
       sqe_.addr = std::bit_cast<__u64>(peer_endpoint_.data());
       sqe_.off = peer_endpoint_.size();
       sqe = sqe_;
@@ -55,7 +58,8 @@ namespace sio::event_loop::stdexec_backend {
       se::set_error_t(std::error_code),
       se::set_stopped_t()>;
 
-    socket_state<Protocol>* state_{};
+    exec::io_uring_context* context_{};
+    int fd_{-1};
     typename Protocol::endpoint peer_endpoint_;
 
     template <class Receiver>
@@ -63,13 +67,14 @@ namespace sio::event_loop::stdexec_backend {
       -> connect_operation<Protocol, Receiver> {
       return {
         std::in_place,
-        *state_,
+        *context_,
+        fd_,
         peer_endpoint_,
         static_cast<Receiver&&>(rcvr)};
     }
 
     env get_env() const noexcept {
-      return {state_->context().get_scheduler()};
+      return {context_->get_scheduler()};
     }
   };
 

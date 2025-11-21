@@ -23,9 +23,8 @@ senders) remains interchangeable.
 | `io_context` | RAII wrapper around `::io_uring`, wake-up fd, submission helpers, and the dispatch loop (`run`, `run_some`, `run_until_empty`). |
 | `scheduler` / `schedule_sender` | Minimal scheduler that queues a NOP CQE and satisfies `stdexec::scheduler`. |
 | `backend` | User-facing facade mirroring `stdexec_backend::backend`; exposes run/stop, state factories, IO senders. |
-| `fd_state` / `file_state` / `seekable_file_state` | Descriptor-aware state mirrors with mode/creation/caching metadata. |
-| `socket_state<Protocol>` | Socket holder with protocol accessors, `bind`, and endpoint query helpers. |
-| `acceptor_state<Protocol>` | Listener holder with cached local endpoint, used for `accept_once`. |
+| `basic_fd` / `socket_fd` tokens | Trivial descriptor wrappers exchanged with handles. All runtime metadata lives inside the backend. |
+| `acceptor_state<Protocol>` | Thin alias of the descriptor token used for listeners; backend stores any wait queues internally. |
 | `completion_slot` | Per-operation bookkeeping (SQE prep, receiver pointer, cancellation token management). |
 | `stop_callback` | Bridges `stdexec::stop_token` to `io_uring_prep_cancel` and guards against races. |
 | `fd_read_sender_span` / `fd_read_sender_single` / `fd_write_sender_span` / `fd_write_sender_single` | Issue `IORING_OP_READ(V)`/`WRITE(V)` with completion dispatch. |
