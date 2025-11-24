@@ -15,23 +15,30 @@ namespace sio::event_loop::epoll {
   class socket_sendmsg_operation
     : public fd_operation_base<socket_sendmsg_operation<Protocol, Receiver>, Receiver> {
    public:
-    socket_sendmsg_operation(socket_state<Protocol>& state, Receiver&& rcvr, ::msghdr msg) noexcept(
+    socket_sendmsg_operation(context& ctx, descriptor_token token, Receiver&& rcvr, ::msghdr msg) noexcept(
       std::is_nothrow_move_constructible_v<Receiver>)
-      : fd_operation_base<socket_sendmsg_operation<Protocol, Receiver>, Receiver>{state.ctx(), state, static_cast<Receiver&&>(rcvr)}
-      , state_{&state}
+      : fd_operation_base<socket_sendmsg_operation<Protocol, Receiver>, Receiver>{ctx, token, static_cast<Receiver&&>(rcvr)}
       , msg_{msg} {
     }
 
     void run_once() noexcept {
       if (this->stop_requested()) {
+        this->release_entry();
         this->complete_stopped();
         return;
       }
 
+      if (!this->ensure_entry()) {
+        this->release_entry();
+        this->complete_error(std::make_error_code(std::errc::bad_file_descriptor));
+        return;
+      }
+
       while (true) {
-        ::ssize_t rc = ::sendmsg(state_->native_handle(), &msg_, 0);
+        ::ssize_t rc = ::sendmsg(this->entry()->native_handle(), &msg_, 0);
         if (rc >= 0) {
           this->reset_stop_callback();
+          this->release_entry();
           stdexec::set_value(std::move(*this).receiver(), static_cast<std::size_t>(rc));
           return;
         }
@@ -39,17 +46,20 @@ namespace sio::event_loop::epoll {
           continue;
         }
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          this->wait_for(interest::write);
+          if (!this->wait_for(interest::write)) {
+            this->release_entry();
+            this->complete_error(std::make_error_code(std::errc::bad_file_descriptor));
+          }
           return;
         }
         auto ec = std::error_code(errno, std::system_category());
+        this->release_entry();
         this->complete_error(ec);
         return;
       }
     }
 
    private:
-    socket_state<Protocol>* state_{nullptr};
     ::msghdr msg_{};
   };
 
@@ -62,18 +72,18 @@ namespace sio::event_loop::epoll {
       stdexec::set_error_t(std::error_code),
       stdexec::set_stopped_t()>;
 
-    socket_state<Protocol>* state_{nullptr};
+    context* context_{nullptr};
+    descriptor_token token_{};
     ::msghdr msg_{};
 
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return socket_sendmsg_operation<Protocol, Receiver>{
-        *state_, static_cast<Receiver&&>(receiver), msg_};
+        *context_, token_, static_cast<Receiver&&>(receiver), msg_};
     }
 
     env get_env() const noexcept {
-      return {state_->ctx().get_scheduler()};
+      return {context_->get_scheduler()};
     }
   };
 } // namespace sio::event_loop::epoll
-

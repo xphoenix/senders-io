@@ -4,10 +4,14 @@
 
 #include <stdexec/execution.hpp>
 
+#include "../../async_resource.hpp"
+#include "../../io_concepts.hpp"
+
 #include <cerrno>
 #include <filesystem>
 #include <system_error>
 #include <utility>
+#include <new>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -38,22 +42,31 @@ namespace sio::event_loop::epoll {
       , receiver_(static_cast<Receiver&&>(rcvr)) {
     }
 
-    friend void tag_invoke(stdexec::start_t, file_open_operation& op) noexcept {
-      auto stop_token = stdexec::get_stop_token(stdexec::get_env(op.receiver_));
+    void start() noexcept {
+      auto stop_token = stdexec::get_stop_token(stdexec::get_env(receiver_));
       if (stop_token.stop_requested()) {
-        stdexec::set_stopped(std::move(op.receiver_));
+        stdexec::set_stopped(std::move(receiver_));
         return;
       }
 
-      int fd = ::openat(op.data_.dirfd_, op.data_.path_.c_str(), op.data_.flags_, op.data_.mode_);
+      int fd = ::openat(data_.dirfd_, data_.path_.c_str(), data_.flags_, data_.mode_);
       if (fd == -1) {
         auto ec = std::error_code(errno, std::system_category());
-        stdexec::set_error(std::move(op.receiver_), std::move(ec));
+        stdexec::set_error(std::move(receiver_), std::move(ec));
         return;
       }
 
-      State state{op.context_, fd, op.mode_, op.creation_, op.caching_};
-      stdexec::set_value(std::move(op.receiver_), std::move(state));
+      descriptor_token token{};
+      try {
+        token = context_.register_descriptor(fd);
+      } catch (const std::bad_alloc&) {
+        ::close(fd);
+        auto ec = std::make_error_code(std::errc::not_enough_memory);
+        stdexec::set_error(std::move(receiver_), std::move(ec));
+        return;
+      }
+
+      stdexec::set_value(std::move(receiver_), token);
     }
 
    private:
@@ -96,4 +109,3 @@ namespace sio::event_loop::epoll {
     }
   };
 } // namespace sio::event_loop::epoll
-

@@ -34,10 +34,10 @@ namespace sio::event_loop::epoll {
       run_operation& operator=(run_operation&&) = delete;
       run_operation& operator=(const run_operation&) = delete;
 
-      friend void tag_invoke(stdexec::start_t, run_operation& op) noexcept {
-        auto stop_token = stdexec::get_stop_token(stdexec::get_env(op.receiver_));
+      void start() noexcept {
+        auto stop_token = stdexec::get_stop_token(stdexec::get_env(receiver_));
         if (stop_token.stop_requested()) {
-          stdexec::set_stopped(std::move(op.receiver_));
+          stdexec::set_stopped(std::move(receiver_));
           return;
         }
 
@@ -46,30 +46,30 @@ namespace sio::event_loop::epoll {
         std::optional<callback_type> callback;
         if constexpr (stdexec::stoppable_token<stop_token_type>) {
           if (stop_token.stop_possible()) {
-            callback.emplace(stop_token, on_stop{op.context_});
+            callback.emplace(stop_token, on_stop{context_});
           }
         }
 
         bool completed = false;
         try {
-          completed = op.run_loop(stop_token);
+          completed = run_loop(stop_token);
         } catch (const std::system_error& err) {
           callback.reset();
-          stdexec::set_error(std::move(op.receiver_), std::make_exception_ptr(err));
+          stdexec::set_error(std::move(receiver_), std::make_exception_ptr(err));
           return;
         } catch (...) {
           callback.reset();
-          stdexec::set_error(std::move(op.receiver_), std::current_exception());
+          stdexec::set_error(std::move(receiver_), std::current_exception());
           return;
         }
 
         callback.reset();
 
         if (!completed) {
-          op.context_.run_until_empty();
-          stdexec::set_stopped(std::move(op.receiver_));
+          context_.run_until_empty();
+          stdexec::set_stopped(std::move(receiver_));
         } else {
-          stdexec::set_value(std::move(op.receiver_));
+          stdexec::set_value(std::move(receiver_));
         }
       }
 
@@ -126,8 +126,8 @@ namespace sio::event_loop::epoll {
       }
     };
 
-    friend auto tag_invoke(stdexec::get_env_t, const run_sender& sndr) noexcept {
-      return run_env{sndr.ctx_};
+    auto get_env() const noexcept -> run_env {
+      return run_env{ctx_};
     }
   };
 
@@ -135,4 +135,3 @@ namespace sio::event_loop::epoll {
     return run_sender{this, mode};
   }
 } // namespace sio::event_loop::epoll
-

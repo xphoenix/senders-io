@@ -15,16 +15,22 @@ namespace sio::event_loop::epoll {
   class socket_connect_operation
     : public fd_operation_base<socket_connect_operation<Protocol, Receiver>, Receiver> {
    public:
-    socket_connect_operation(socket_state<Protocol>& state, typename Protocol::endpoint endpoint, Receiver&& rcvr) noexcept(
+    socket_connect_operation(context& ctx, descriptor_token token, typename Protocol::endpoint endpoint, Receiver&& rcvr) noexcept(
       std::is_nothrow_move_constructible_v<Receiver>)
-      : fd_operation_base<socket_connect_operation<Protocol, Receiver>, Receiver>{state.ctx(), state, static_cast<Receiver&&>(rcvr)}
-      , state_{&state}
+      : fd_operation_base<socket_connect_operation<Protocol, Receiver>, Receiver>{ctx, token, static_cast<Receiver&&>(rcvr)}
       , endpoint_{std::move(endpoint)} {
     }
 
     void run_once() noexcept {
       if (this->stop_requested()) {
+        this->release_entry();
         this->complete_stopped();
+        return;
+      }
+
+      if (!this->ensure_entry()) {
+        this->release_entry();
+        this->complete_error(std::make_error_code(std::errc::bad_file_descriptor));
         return;
       }
 
@@ -35,11 +41,12 @@ namespace sio::event_loop::epoll {
 
       while (true) {
         int rc = ::connect(
-          state_->native_handle(),
+          this->entry()->native_handle(),
           reinterpret_cast<const sockaddr*>(endpoint_.data()),
           endpoint_.size());
         if (rc == 0) {
           this->reset_stop_callback();
+          this->release_entry();
           stdexec::set_value(std::move(*this).receiver());
           return;
         }
@@ -50,11 +57,16 @@ namespace sio::event_loop::epoll {
 
         if (errno == EINPROGRESS || errno == EALREADY) {
           awaiting_completion_ = true;
-          this->wait_for(interest::write);
+          if (!this->wait_for(interest::write)) {
+            awaiting_completion_ = false;
+            this->release_entry();
+            this->complete_error(std::make_error_code(std::errc::bad_file_descriptor));
+          }
           return;
         }
 
         auto ec = std::error_code(errno, std::system_category());
+        this->release_entry();
         this->complete_error(ec);
         return;
       }
@@ -64,22 +76,25 @@ namespace sio::event_loop::epoll {
     void complete_connect() noexcept {
       int err = 0;
       socklen_t len = sizeof(err);
-      if (::getsockopt(state_->native_handle(), SOL_SOCKET, SO_ERROR, &err, &len) == -1) {
+      if (::getsockopt(this->entry()->native_handle(), SOL_SOCKET, SO_ERROR, &err, &len) == -1) {
         auto ec = std::error_code(errno, std::system_category());
+        awaiting_completion_ = false;
+        this->release_entry();
         this->complete_error(ec);
         return;
       }
       awaiting_completion_ = false;
       if (err == 0) {
         this->reset_stop_callback();
+        this->release_entry();
         stdexec::set_value(std::move(*this).receiver());
       } else {
         auto ec = std::error_code(err, std::system_category());
+        this->release_entry();
         this->complete_error(ec);
       }
     }
 
-    socket_state<Protocol>* state_{nullptr};
     typename Protocol::endpoint endpoint_{};
     bool awaiting_completion_{false};
   };
@@ -93,18 +108,18 @@ namespace sio::event_loop::epoll {
       stdexec::set_error_t(std::error_code),
       stdexec::set_stopped_t()>;
 
-    socket_state<Protocol>* state_{nullptr};
+    context* context_{nullptr};
+    descriptor_token token_{};
     typename Protocol::endpoint endpoint_{};
 
     template <stdexec::receiver Receiver>
     auto connect(Receiver receiver) const {
       return socket_connect_operation<Protocol, Receiver>{
-        *state_, endpoint_, static_cast<Receiver&&>(receiver)};
+        *context_, token_, endpoint_, static_cast<Receiver&&>(receiver)};
     }
 
     env get_env() const noexcept {
-      return {state_->ctx().get_scheduler()};
+      return {context_->get_scheduler()};
     }
   };
 } // namespace sio::event_loop::epoll
-

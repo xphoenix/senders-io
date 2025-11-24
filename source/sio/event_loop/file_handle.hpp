@@ -47,8 +47,8 @@ namespace sio::event_loop {
       return state().native_handle();
     }
 
-    auto close() {
-      return context().close(state());
+    auto close() const {
+      return context().close(const_cast<state_type&>(state()));
     }
 
     auto read_some(sio::mutable_buffer_span buffers) const {
@@ -132,8 +132,8 @@ namespace sio::event_loop {
       return state().native_handle();
     }
 
-    auto close() {
-      return context().close(state());
+    auto close() const {
+      return context().close(const_cast<state_type&>(state()));
     }
 
     auto read_some(sio::mutable_buffer_span buffers) const {
@@ -255,8 +255,8 @@ namespace sio::event_loop {
     auto open() noexcept {
       return ::stdexec::then(
         context_.open_file(path_, mode_, creation_, caching_, dirfd_),
-        [this](state_type&& state) {
-          return handle_type{context_, static_cast<state_type&&>(state)};
+        [pc = &context_](state_type state) {
+          return handle_type{*pc, static_cast<state_type&&>(state)};
         });
     }
    private:
@@ -304,8 +304,8 @@ namespace sio::event_loop {
     auto open() noexcept {
       return ::stdexec::then(
         context_.open_seekable_file(path_, mode_, creation_, caching_, dirfd_),
-        [this](state_type&& state) {
-          return handle_type{context_, static_cast<state_type&&>(state)};
+        [pc = &context_](state_type state) {
+          return handle_type{*pc, static_cast<state_type&&>(state)};
         });
     }
    private:

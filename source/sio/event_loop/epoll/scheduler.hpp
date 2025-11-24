@@ -32,10 +32,9 @@ namespace sio::event_loop::epoll {
 
     auto schedule() const noexcept;
 
-    friend scheduler tag_invoke(
-      stdexec::get_completion_scheduler_t<stdexec::set_value_t>,
-      scheduler sched) noexcept {
-      return sched;
+    auto get_completion_scheduler(stdexec::get_completion_scheduler_t<stdexec::set_value_t>) const noexcept
+      -> scheduler {
+      return *this;
     }
 
    private:
@@ -58,20 +57,20 @@ namespace sio::event_loop::epoll {
       schedule_operation& operator=(schedule_operation&&) = delete;
       schedule_operation& operator=(const schedule_operation&) = delete;
 
-      friend void tag_invoke(stdexec::start_t, schedule_operation& op) noexcept {
-        auto stop_token = stdexec::get_stop_token(stdexec::get_env(op.receiver_));
+      void start() noexcept {
+        auto stop_token = stdexec::get_stop_token(stdexec::get_env(receiver_));
         if (stop_token.stop_requested()) {
-          stdexec::set_stopped(std::move(op.receiver_));
+          stdexec::set_stopped(std::move(receiver_));
           return;
         }
 
         if constexpr (stdexec::stoppable_token<decltype(stop_token)>) {
           if (stop_token.stop_possible()) {
-            op.stop_callback_.emplace(stop_token, on_stop{&op});
+            stop_callback_.emplace(stop_token, on_stop{this});
           }
         }
 
-        op.context_.enqueue_task(op);
+        context_.enqueue_task(*this);
       }
 
      private:
@@ -124,8 +123,8 @@ namespace sio::event_loop::epoll {
         return schedule_operation<Receiver>{*context_, static_cast<Receiver&&>(receiver)};
       }
 
-      friend auto tag_invoke(stdexec::get_env_t, const schedule_sender& sndr) noexcept {
-        return schedule_env{scheduler{sndr.context_}};
+      auto get_env() const noexcept -> schedule_env {
+        return schedule_env{scheduler{context_}};
       }
     };
   } // namespace detail
@@ -138,4 +137,3 @@ namespace sio::event_loop::epoll {
     return scheduler{this};
   }
 } // namespace sio::event_loop::epoll
-

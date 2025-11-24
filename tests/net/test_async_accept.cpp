@@ -31,9 +31,28 @@
 #include <exec/when_any.hpp>
 
 #include <utility>
+#include <cstring>
+#include <sys/socket.h>
 
 using namespace sio;
 using namespace stdexec;
+
+namespace {
+  template <class Handle>
+  ip::endpoint get_local_endpoint(const Handle& handle) {
+    ::sockaddr_storage storage{};
+    socklen_t len = sizeof(storage);
+    int rc = ::getsockname(
+      handle.native_handle(),
+      reinterpret_cast<::sockaddr*>(&storage),
+      &len);
+    REQUIRE(rc == 0);
+
+    ip::endpoint endpoint{};
+    std::memcpy(endpoint.data(), &storage, static_cast<std::size_t>(len));
+    return endpoint;
+  }
+} // namespace
 
 TEMPLATE_LIST_TEST_CASE("async_accept concept", "[async_accept]", SIO_TEST_BACKEND_TYPES) {
   using Backend = TestType;
@@ -63,22 +82,25 @@ TEMPLATE_LIST_TEST_CASE("async_accept should work", "[async_accept]", SIO_TEST_B
   loop_type ctx{};
 
   sio::event_loop::acceptor acceptor{
-    &ctx, ip::tcp::v4(), ip::endpoint{ip::address_v4::any(), 2080}};
-  stdexec::sender auto accept = let_value(acceptor.open(), [](auto& acceptor_handle) mutable {
-    auto sequence = sio::async::accept(acceptor_handle)
-                  | let_value_each([](auto& client) { return sio::async::close(client); })
-                  | exec::ignore_all_values();
-    auto close_sender = acceptor_handle.close();
-    return exec::finally(std::move(sequence), std::move(close_sender));
-  });
-
+    &ctx, ip::tcp::v4(), ip::endpoint{ip::address_v4::any(), 0}};
   sio::event_loop::socket sock{&ctx, ip::tcp::v4()};
-  stdexec::sender auto connect = let_value(sock.open(), [](auto& client) {
-    auto connect_sender = sio::async::connect(client, ip::endpoint{ip::address_v4::loopback(), 2080});
-    auto close_sender = sio::async::close(client);
-    return exec::finally(std::move(connect_sender), std::move(close_sender));
+
+  auto test_sender = let_value(acceptor.open(), [&](auto& acceptor_handle) mutable {
+    auto endpoint = get_local_endpoint(acceptor_handle);
+    auto accept_sequence = sio::async::accept(acceptor_handle)
+                         | let_value_each([](auto& client) { return sio::async::close(client); })
+                         | exec::ignore_all_values();
+    auto accept_sender = exec::finally(std::move(accept_sequence), acceptor_handle.close());
+
+    auto connect_sender = let_value(sock.open(), [endpoint](auto& client) {
+      auto connect = sio::async::connect(client, endpoint);
+      auto close_sender = sio::async::close(client);
+      return exec::finally(std::move(connect), std::move(close_sender));
+    });
+
+    auto accept_and_connect = exec::when_any(std::move(accept_sender), std::move(connect_sender));
+    return exec::when_any(std::move(accept_and_connect), ctx.run());
   });
 
-  auto accept_and_connect = exec::when_any(accept, connect);
-  stdexec::sync_wait(exec::when_any(std::move(accept_and_connect), ctx.run()));
+  stdexec::sync_wait(std::move(test_sender));
 }

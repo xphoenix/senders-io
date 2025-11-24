@@ -132,7 +132,7 @@ namespace sio::test {
 #if SIO_TEST_HAS_EPOLL
   struct epoll_backend {
     static constexpr std::string_view name = "epoll";
-    static constexpr bool available = false; // TODO: re-enable after epoll token refactor completes.
+    static constexpr bool available = true;
 
     using loop_type = sio::event_loop::epoll::backend;
     using native_context_type = typename loop_type::native_context_type;

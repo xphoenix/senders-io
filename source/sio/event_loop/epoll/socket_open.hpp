@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <system_error>
 #include <utility>
+#include <new>
 
 #include <unistd.h>
 
@@ -32,23 +33,23 @@ namespace sio::event_loop::epoll {
       , receiver_(static_cast<Receiver&&>(rcvr)) {
     }
 
-    friend void tag_invoke(stdexec::start_t, socket_open_operation& op) {
-      auto stop_token = stdexec::get_stop_token(stdexec::get_env(op.receiver_));
+    void start() noexcept {
+      auto stop_token = stdexec::get_stop_token(stdexec::get_env(receiver_));
       if (stop_token.stop_requested()) {
-        stdexec::set_stopped(std::move(op.receiver_));
+        stdexec::set_stopped(std::move(receiver_));
         return;
       }
 
-      int type = op.protocol_.type() | SOCK_CLOEXEC;
-      int fd = ::socket(op.protocol_.family(), type | SOCK_NONBLOCK, op.protocol_.protocol());
+      int type = protocol_.type() | SOCK_CLOEXEC;
+      int fd = ::socket(protocol_.family(), type | SOCK_NONBLOCK, protocol_.protocol());
       if (fd == -1 && errno == EINVAL) {
-        fd = ::socket(op.protocol_.family(), type, op.protocol_.protocol());
+        fd = ::socket(protocol_.family(), type, protocol_.protocol());
         if (fd != -1) {
           try {
             set_non_blocking(fd);
           } catch (const std::system_error& err) {
             ::close(fd);
-            stdexec::set_error(std::move(op.receiver_), err.code());
+            stdexec::set_error(std::move(receiver_), err.code());
             return;
           }
         }
@@ -56,12 +57,21 @@ namespace sio::event_loop::epoll {
 
       if (fd == -1) {
         auto ec = std::error_code(errno, std::system_category());
-        stdexec::set_error(std::move(op.receiver_), std::move(ec));
+        stdexec::set_error(std::move(receiver_), std::move(ec));
         return;
       }
 
-      socket_state<Protocol> state{op.context_, fd, std::move(op.protocol_)};
-      stdexec::set_value(std::move(op.receiver_), std::move(state));
+      descriptor_token token{};
+      try {
+        token = context_.register_descriptor(fd);
+      } catch (const std::bad_alloc&) {
+        ::close(fd);
+        auto ec = std::make_error_code(std::errc::not_enough_memory);
+        stdexec::set_error(std::move(receiver_), std::move(ec));
+        return;
+      }
+
+      stdexec::set_value(std::move(receiver_), socket_state<Protocol>{token});
     }
 
    private:
