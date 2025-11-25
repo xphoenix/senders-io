@@ -103,9 +103,5 @@ namespace sio::event_loop::epoll {
         caching_,
         static_cast<Receiver&&>(receiver)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 } // namespace sio::event_loop::epoll

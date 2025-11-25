@@ -38,12 +38,22 @@ namespace sio::event_loop {
       return *context_;
     }
 
-    bool is_open() const noexcept {
-      return state_.is_valid();
+    state_type& state() noexcept {
+      SIO_ASSERT(is_open());
+      return state_;
     }
 
-    native_handle_type native_handle() const noexcept {
-      return state().native_handle();
+    const state_type& state() const noexcept {
+      SIO_ASSERT(is_open());
+      return state_;
+    }
+
+    native_handle_type native_handle() const {
+      return detail::resolve_native_handler(context(), state());
+    }
+
+    bool is_open() const noexcept {
+      return state_.is_valid();
     }
 
     auto close() const noexcept {
@@ -85,15 +95,6 @@ namespace sio::event_loop {
    private:
     friend loop_type;
 
-    state_type& state() noexcept {
-      SIO_ASSERT(is_open());
-      return state_;
-    }
-
-    const state_type& state() const noexcept {
-      SIO_ASSERT(is_open());
-      return state_;
-    }
   };
 
   template <class Loop, class Protocol>
@@ -152,6 +153,18 @@ namespace sio::event_loop {
       return *context_;
     }
 
+    state_type& state() noexcept {
+      return state_;
+    }
+
+    const state_type& state() const noexcept {
+      return state_;
+    }
+
+    native_handle_type native_handle() const {
+      return detail::resolve_native_handler(context(), state());
+    }
+
     auto accept_once() const {
       return ::stdexec::then(
         context().accept_once(const_cast<state_type&>(state())),
@@ -165,22 +178,9 @@ namespace sio::event_loop {
       return context().close(const_cast<state_type&>(state()));
     }
 
-    native_handle_type native_handle() const noexcept {
-      return state().native_handle();
-    }
-
    private:
     friend loop_type;
 
-    state_type& state() noexcept {
-      SIO_ASSERT(state_.is_valid());
-      return state_;
-    }
-
-    const state_type& state() const noexcept {
-      SIO_ASSERT(state_.is_valid());
-      return state_;
-    }
   };
 
   template <class Loop, class Protocol>

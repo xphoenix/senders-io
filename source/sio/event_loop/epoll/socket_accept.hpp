@@ -93,9 +93,5 @@ namespace sio::event_loop::epoll {
       return socket_accept_operation<Protocol, Receiver>{
         *context_, token_, static_cast<Receiver&&>(receiver)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 } // namespace sio::event_loop::epoll

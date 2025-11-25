@@ -69,10 +69,6 @@ namespace sio::event_loop::iouring {
       return socket_open_operation<Protocol, Receiver>{
         *context_, protocol_, static_cast<Receiver&&>(receiver)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 
 } // namespace sio::event_loop::iouring

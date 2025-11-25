@@ -10,7 +10,6 @@
 
 #include <filesystem>
 #include <type_traits>
-#include <utility>
 
 namespace sio::event_loop {
   template <class Loop>
@@ -39,12 +38,22 @@ namespace sio::event_loop {
       return *context_;
     }
 
-    bool is_open() const noexcept {
-      return state_.is_valid();
+    state_type& state() noexcept {
+      SIO_ASSERT(is_open());
+      return state_;
     }
 
-    native_handle_type native_handle() const noexcept {
-      return state().native_handle();
+    const state_type& state() const noexcept {
+      SIO_ASSERT(is_open());
+      return state_;
+    }
+
+    native_handle_type native_handle() const {
+      return detail::resolve_native_handler(context(), state());
+    }
+
+    bool is_open() const noexcept {
+      return state_.is_valid();
     }
 
     auto close() const {
@@ -86,15 +95,6 @@ namespace sio::event_loop {
   private:
     friend loop_type;
 
-    state_type& state() noexcept {
-      SIO_ASSERT(is_open());
-      return state_;
-    }
-
-    const state_type& state() const noexcept {
-      SIO_ASSERT(is_open());
-      return state_;
-    }
   };
 
   template <class Loop>
@@ -128,8 +128,18 @@ namespace sio::event_loop {
       return state_.is_valid();
     }
 
-    native_handle_type native_handle() const noexcept {
-      return state().native_handle();
+    state_type& state() noexcept {
+      SIO_ASSERT(is_open());
+      return state_;
+    }
+
+    const state_type& state() const noexcept {
+      SIO_ASSERT(is_open());
+      return state_;
+    }
+
+    native_handle_type native_handle() const {
+      return detail::resolve_native_handler(context(), state());
     }
 
     auto close() const {
@@ -202,16 +212,6 @@ namespace sio::event_loop {
 
   private:
     friend loop_type;
-
-    state_type& state() noexcept {
-      SIO_ASSERT(is_open());
-      return state_;
-    }
-
-    const state_type& state() const noexcept {
-      SIO_ASSERT(is_open());
-      return state_;
-    }
   };
 
   template <class Loop>

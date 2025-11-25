@@ -93,26 +93,20 @@ class backend {
 
   auto read(basic_fd& state, sio::mutable_buffer_span buffers) {
     return reduce(
-      buffered_sequence(stdexec_backend::read_factory{&context_, state.native_handle()}, buffers),
-      0ull);
+      buffered_sequence(stdexec_backend::read_factory{&context_, state}, buffers), 0ull);
   }
 
   auto read(basic_fd& state, sio::mutable_buffer buffer) {
-    auto buffered =
-      buffered_sequence(stdexec_backend::read_factory{&context_, state.native_handle()}, buffer);
+    auto buffered = buffered_sequence(stdexec_backend::read_factory{&context_, state}, buffer);
     return reduce(std::move(buffered), 0ull);
   }
 
   auto write(basic_fd& state, sio::const_buffer_span buffers) {
-    return reduce(
-      buffered_sequence(stdexec_backend::write_factory{&context_, state.native_handle()}, buffers),
-      0ull);
+    return reduce(buffered_sequence(stdexec_backend::write_factory{&context_, state}, buffers), 0ull);
   }
 
   auto write(basic_fd& state, sio::const_buffer buffer) {
-    return reduce(
-      buffered_sequence(stdexec_backend::write_factory{&context_, state.native_handle()}, buffer),
-      0ull);
+    return reduce(buffered_sequence(stdexec_backend::write_factory{&context_, state}, buffer), 0ull);
   }
 
   auto read_some(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
@@ -134,22 +128,21 @@ class backend {
   auto read(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
     return reduce(
       buffered_sequence(
-        stdexec_backend::read_factory{&context_, state.native_handle()},
+        stdexec_backend::read_factory{&context_, state},
         buffers,
         offset),
       0ull);
   }
 
   auto read(seekable_file_state& state, sio::mutable_buffer buffer, ::off_t offset) {
-    auto buffered =
-      buffered_sequence(stdexec_backend::read_factory{&context_, state.native_handle()}, buffer, offset);
+    auto buffered = buffered_sequence(stdexec_backend::read_factory{&context_, state}, buffer, offset);
     return reduce(std::move(buffered), 0ull);
   }
 
   auto write(seekable_file_state& state, sio::const_buffer_span buffers, ::off_t offset) {
     return reduce(
       buffered_sequence(
-        stdexec_backend::write_factory{&context_, state.native_handle()},
+        stdexec_backend::write_factory{&context_, state},
         buffers,
         offset),
       0ull);
@@ -158,7 +151,7 @@ class backend {
   auto write(seekable_file_state& state, sio::const_buffer buffer, ::off_t offset) {
     return reduce(
       buffered_sequence(
-        stdexec_backend::write_factory{&context_, state.native_handle()},
+        stdexec_backend::write_factory{&context_, state},
         buffer,
         offset),
       0ull);

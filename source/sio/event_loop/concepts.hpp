@@ -139,6 +139,17 @@ namespace sio::event_loop {
       loop.write(state, const_buffers, offset);
       loop.write(state, const_buffer, offset);
     };
+
+  namespace detail {
+    template <class Loop, class State>
+    auto resolve_native_handler(Loop& loop, const State& state) {
+      if constexpr (requires { loop.native_context().native_handle(state.native_handle()); }) {
+        return loop.native_context().native_handle(state.native_handle());
+      } else {
+        return state.native_handle();
+      }
+    }
+  } // namespace detail
 } // namespace sio::event_loop
 
 namespace sio {

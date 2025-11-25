@@ -89,17 +89,20 @@ TEMPLATE_LIST_TEST_CASE(
   constexpr auto content = std::string_view{"hello world"};
   write_to_file(path, content);
   auto storage = std::string(content.size(), '0');
+
   sio::event_loop::file file{
     &loop, path, sio::async::mode::read, sio::async::creation::open_existing};
+
   auto sender = sio::async::use_resources(
     [&](auto handle) {
-      auto factory = typename Backend::read_factory{&loop.native_context(), handle.native_handle()};
+      using state_type = typename Backend::loop_type::file_state;
+      auto factory = typename Backend::read_factory{&loop.native_context(), handle.state()};
+
       auto buffer = sio::buffer(storage);
       auto buffered_read_some = sio::buffered_sequence(factory, buffer);
       return sio::ignore_all(std::move(buffered_read_some));
     },
     file);
-
   stdexec::sync_wait(exec::when_any(std::move(sender), loop.run()));
 
   CHECK(storage == content);
@@ -130,7 +133,8 @@ TEMPLATE_LIST_TEST_CASE(
     &loop, path, sio::async::mode::read, sio::async::creation::open_existing};
   auto sender = sio::async::use_resources(
     [&](auto handle) {
-      auto factory = typename Backend::read_factory{&loop.native_context(), handle.native_handle()};
+      using state_type = typename Backend::loop_type::file_state;
+      auto factory = typename Backend::read_factory{&loop.native_context(), handle.state()};
       auto buffered_read_some = sio::buffered_sequence(factory, buffers);
       return sio::ignore_all(std::move(buffered_read_some));
     },
@@ -162,8 +166,8 @@ TEMPLATE_LIST_TEST_CASE(
     &loop, path, sio::async::mode::write, sio::async::creation::truncate_existing};
   auto sender = sio::async::use_resources(
     [&](auto handle) {
-      auto factory =
-        typename Backend::write_factory{&loop.native_context(), handle.native_handle()};
+      using state_type = typename Backend::loop_type::file_state;
+      auto factory = typename Backend::write_factory{&loop.native_context(), handle.state()};
       auto buffer = sio::buffer(content);
       auto buffered_write_some = sio::buffered_sequence(factory, buffer);
       return sio::ignore_all(std::move(buffered_write_some));

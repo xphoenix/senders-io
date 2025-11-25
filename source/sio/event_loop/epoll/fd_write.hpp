@@ -197,10 +197,6 @@ namespace sio::event_loop::epoll {
       return fd_write_operation_span<Receiver>{
         *context_, token_, buffers_, static_cast<Receiver&&>(receiver), offset_};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 
   struct fd_write_sender_single {
@@ -233,10 +229,6 @@ namespace sio::event_loop::epoll {
     auto connect(Receiver receiver) const {
       return fd_write_operation_single<Receiver>{
         *context_, token_, buffer_, static_cast<Receiver&&>(receiver), offset_};
-    }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
     }
   };
 

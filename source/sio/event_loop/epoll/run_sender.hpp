@@ -121,7 +121,8 @@ namespace sio::event_loop::epoll {
     struct run_env {
       context* ctx;
 
-      auto query(stdexec::get_completion_scheduler_t<stdexec::set_value_t>) const noexcept -> scheduler {
+      auto query(stdexec::get_completion_scheduler_t<stdexec::set_value_t>) const noexcept
+        -> scheduler {
         return ctx->get_scheduler();
       }
     };

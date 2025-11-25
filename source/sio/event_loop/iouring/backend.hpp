@@ -102,24 +102,22 @@ namespace sio::event_loop::iouring {
 
     auto read(basic_fd& state, sio::mutable_buffer_span buffers) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(fd_read_factory{&context_, state.native_handle()}, buffers), 0ull);
+        ::sio::buffered_sequence(fd_read_factory{&context_, state}, buffers), 0ull);
     }
 
     auto read(basic_fd& state, sio::mutable_buffer buffer) {
-      auto buffered = ::sio::buffered_sequence(
-        fd_read_factory{&context_, state.native_handle()}, buffer);
+      auto buffered = ::sio::buffered_sequence(fd_read_factory{&context_, state}, buffer);
       return ::sio::reduce(std::move(buffered), 0ull);
     }
 
     auto write(basic_fd& state, sio::const_buffer_span buffers) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(fd_write_factory{&context_, state.native_handle()}, buffers),
-        0ull);
+        ::sio::buffered_sequence(fd_write_factory{&context_, state}, buffers), 0ull);
     }
 
     auto write(basic_fd& state, sio::const_buffer buffer) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(fd_write_factory{&context_, state.native_handle()}, buffer), 0ull);
+        ::sio::buffered_sequence(fd_write_factory{&context_, state}, buffer), 0ull);
     }
 
     auto read_some(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
@@ -140,28 +138,24 @@ namespace sio::event_loop::iouring {
 
     auto read(seekable_file_state& state, sio::mutable_buffer_span buffers, ::off_t offset) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(
-          fd_read_factory{&context_, state.native_handle()}, buffers, offset),
+        ::sio::buffered_sequence(fd_read_factory{&context_, state}, buffers, offset),
         0ull);
     }
 
     auto read(seekable_file_state& state, sio::mutable_buffer buffer, ::off_t offset) {
-      auto buffered = ::sio::buffered_sequence(
-        fd_read_factory{&context_, state.native_handle()}, buffer, offset);
+      auto buffered = ::sio::buffered_sequence(fd_read_factory{&context_, state}, buffer, offset);
       return ::sio::reduce(std::move(buffered), 0ull);
     }
 
     auto write(seekable_file_state& state, sio::const_buffer_span buffers, ::off_t offset) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(
-          fd_write_factory{&context_, state.native_handle()}, buffers, offset),
+        ::sio::buffered_sequence(fd_write_factory{&context_, state}, buffers, offset),
         0ull);
     }
 
     auto write(seekable_file_state& state, sio::const_buffer buffer, ::off_t offset) {
       return ::sio::reduce(
-        ::sio::buffered_sequence(
-          fd_write_factory{&context_, state.native_handle()}, buffer, offset),
+        ::sio::buffered_sequence(fd_write_factory{&context_, state}, buffer, offset),
         0ull);
     }
 

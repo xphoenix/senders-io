@@ -1,6 +1,7 @@
 #pragma once
 
 #include "submission_operation.hpp"
+#include "../concepts.hpp"
 
 namespace sio::event_loop::iouring {
 
@@ -118,10 +119,6 @@ namespace sio::event_loop::iouring {
       return fd_write_operation_span<Receiver>{
         *context_, buffers_, fd_, offset_, static_cast<Receiver&&>(receiver)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 
   struct fd_write_sender_single {
@@ -153,22 +150,18 @@ namespace sio::event_loop::iouring {
       return fd_write_operation_single<Receiver>{
         *context_, buffer_, fd_, offset_, static_cast<Receiver&&>(receiver)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 
   struct fd_write_factory {
     io_context* context_{};
-    int fd_{};
+    basic_fd state_{};
 
     fd_write_sender_span operator()(sio::const_buffer_span data, ::off_t offset) const noexcept {
-      return fd_write_sender_span{*context_, data, fd_, offset};
+      return fd_write_sender_span{*context_, data, state_.native_handle(), offset};
     }
 
     fd_write_sender_single operator()(sio::const_buffer data, ::off_t offset) const noexcept {
-      return fd_write_sender_single{*context_, data, fd_, offset};
+      return fd_write_sender_single{*context_, data, state_.native_handle(), offset};
     }
   };
 

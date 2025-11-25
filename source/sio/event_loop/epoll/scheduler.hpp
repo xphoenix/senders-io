@@ -101,14 +101,6 @@ namespace sio::event_loop::epoll {
       std::optional<callback_type> stop_callback_{};
     };
 
-    struct schedule_env {
-      scheduler sched;
-
-      auto query(stdexec::get_completion_scheduler_t<stdexec::set_value_t>) const noexcept -> scheduler {
-        return sched;
-      }
-    };
-
     struct schedule_sender {
       using sender_concept = stdexec::sender_t;
 
@@ -122,6 +114,15 @@ namespace sio::event_loop::epoll {
       auto connect(Receiver receiver) const {
         return schedule_operation<Receiver>{*context_, static_cast<Receiver&&>(receiver)};
       }
+
+      struct schedule_env {
+        scheduler sched;
+
+        auto query(stdexec::get_completion_scheduler_t<stdexec::set_value_t>) const noexcept
+          -> scheduler {
+          return sched;
+        }
+      };
 
       auto get_env() const noexcept -> schedule_env {
         return schedule_env{scheduler{context_}};

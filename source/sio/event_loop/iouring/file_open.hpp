@@ -78,10 +78,6 @@ namespace sio::event_loop::iouring {
       return file_open_operation<Receiver, State>{
         open_data{data_}, *context_, static_cast<Receiver&&>(receiver)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 
 } // namespace sio::event_loop::iouring

@@ -30,7 +30,7 @@ namespace sio::event_loop::epoll {
   class backend {
    public:
     using native_context_type = context;
-    using native_handle_type = descriptor_token;
+    using native_handle_type = int;
     using env = epoll::env;
     using file_state = epoll::file_state;
     using seekable_file_state = epoll::seekable_file_state;

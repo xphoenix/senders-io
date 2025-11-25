@@ -71,9 +71,5 @@ namespace sio::event_loop::stdexec_backend {
         listen_fd_,
         static_cast<Receiver&&>(rcvr)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 } // namespace sio::event_loop::stdexec_backend

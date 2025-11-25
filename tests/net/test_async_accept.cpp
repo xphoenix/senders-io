@@ -98,9 +98,9 @@ TEMPLATE_LIST_TEST_CASE("async_accept should work", "[async_accept]", SIO_TEST_B
       return exec::finally(std::move(connect), std::move(close_sender));
     });
 
-    auto accept_and_connect = exec::when_any(std::move(accept_sender), std::move(connect_sender));
-    return exec::when_any(std::move(accept_and_connect), ctx.run());
+    return exec::when_any(std::move(accept_sender), std::move(connect_sender));
   });
 
-  stdexec::sync_wait(std::move(test_sender));
+  auto runner = exec::when_any(std::move(test_sender), ctx.run());
+  stdexec::sync_wait(std::move(runner));
 }

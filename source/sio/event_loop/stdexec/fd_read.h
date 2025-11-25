@@ -1,6 +1,7 @@
 #pragma once
 
 #include "details.h"
+#include "../concepts.hpp"
 
 namespace sio::event_loop::stdexec_backend {
   struct read_submission {
@@ -126,10 +127,6 @@ namespace sio::event_loop::stdexec_backend {
         offset_,
         static_cast<Receiver&&>(rcvr)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 
   struct read_sender_single {
@@ -166,22 +163,18 @@ namespace sio::event_loop::stdexec_backend {
         offset_,
         static_cast<Receiver&&>(rcvr)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 
   struct read_factory {
     exec::io_uring_context* context_{};
-    int fd_{};
+    basic_fd state_{};
 
     read_sender operator()(sio::mutable_buffer_span data, ::off_t offset) const noexcept {
-      return read_sender{*context_, data, fd_, offset};
+      return read_sender{*context_, data, state_.native_handle(), offset};
     }
 
     read_sender_single operator()(sio::mutable_buffer data, ::off_t offset) const noexcept {
-      return read_sender_single{*context_, data, fd_, offset};
+      return read_sender_single{*context_, data, state_.native_handle(), offset};
     }
   };
 } // namespace sio::event_loop::stdexec_backend

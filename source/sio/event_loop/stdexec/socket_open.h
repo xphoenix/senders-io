@@ -55,10 +55,6 @@ namespace sio::event_loop::stdexec_backend {
         protocol_,
         static_cast<Receiver&&>(rcvr)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 
   template <class Protocol, class Receiver>

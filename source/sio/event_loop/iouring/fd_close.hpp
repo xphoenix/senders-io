@@ -63,10 +63,6 @@ namespace sio::event_loop::iouring {
     auto connect(Receiver receiver) const {
       return fd_close_operation<Receiver>{*context_, fd_, static_cast<Receiver&&>(receiver)};
     }
-
-    env get_env() const noexcept {
-      return {context_->get_scheduler()};
-    }
   };
 
 } // namespace sio::event_loop::iouring
