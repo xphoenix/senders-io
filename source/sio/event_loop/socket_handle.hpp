@@ -123,6 +123,18 @@ namespace sio::event_loop {
                return socket_handle<loop_type, protocol_type>{*pc, static_cast<state_type&&>(state)};
              });
     }
+
+    template <class Options>
+    auto open(Options&& options) noexcept {
+      if constexpr (requires { context_.open_socket(protocol_, static_cast<Options&&>(options)); }) {
+        return context_.open_socket(protocol_, static_cast<Options&&>(options))
+             | ::stdexec::then([pc = &context_](state_type&& state) {
+                 return socket_handle<loop_type, protocol_type>{*pc, static_cast<state_type&&>(state)};
+               });
+      } else {
+        static_assert(sizeof(Options) == 0, "socket options not supported by this backend");
+      }
+    }
   };
 
   template <class Loop, class Protocol>
@@ -166,11 +178,12 @@ namespace sio::event_loop {
     }
 
     auto accept_once() const {
+      auto* ctx = &context();
       return ::stdexec::then(
-        context().accept_once(const_cast<state_type&>(state())),
-        [this](socket_state_t<loop_type, protocol_type>&& state) {
+        ctx->accept_once(const_cast<state_type&>(state())),
+        [ctx](socket_state_t<loop_type, protocol_type>&& state) {
           return socket_handle<loop_type, protocol_type>{
-            context(), static_cast<socket_state_t<loop_type, protocol_type>&&>(state)};
+            *ctx, static_cast<socket_state_t<loop_type, protocol_type>&&>(state)};
         });
     }
 
@@ -217,6 +230,18 @@ namespace sio::event_loop {
            | ::stdexec::then([pc = &context_, ep = endpoint_](state_type&& state) {
                return acceptor_handle<loop_type, protocol_type>{*pc, static_cast<state_type&&>(state), ep};
              });
+    }
+
+    template <class Options>
+    auto open(Options&& options) noexcept {
+      if constexpr (requires { context_.open_acceptor(protocol_, endpoint_, static_cast<Options&&>(options)); }) {
+        return context_.open_acceptor(protocol_, endpoint_, static_cast<Options&&>(options))
+             | ::stdexec::then([pc = &context_, ep = endpoint_](state_type&& state) {
+                 return acceptor_handle<loop_type, protocol_type>{*pc, static_cast<state_type&&>(state), ep};
+               });
+      } else {
+        static_assert(sizeof(Options) == 0, "acceptor options not supported by this backend");
+      }
     }
   };
 

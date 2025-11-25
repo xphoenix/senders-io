@@ -10,6 +10,7 @@
 
 #include <concepts>
 #include <sys/types.h>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -35,6 +36,9 @@ namespace sio::event_loop {
   template <class Protocol>
   struct socket_fd : basic_fd {
     using basic_fd::basic_fd;
+
+    bool unlink_on_close{false};
+    std::string unix_path{};
   };
 
   template <class Loop>

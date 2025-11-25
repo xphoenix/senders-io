@@ -12,6 +12,7 @@
 #include <stdexec/execution.hpp>
 
 #include <optional>
+#include <string>
 #include <system_error>
 #include <type_traits>
 #include <utility>
@@ -40,6 +41,9 @@ namespace sio::event_loop::epoll {
     socket_state(descriptor_token token) noexcept
       : descriptor_token{token} {
     }
+
+    bool unlink_on_close{false};
+    std::string unix_path{};
   };
 
   template <class Protocol>
@@ -52,6 +56,9 @@ namespace sio::event_loop::epoll {
     acceptor_state(descriptor_token token) noexcept
       : descriptor_token{token} {
     }
+
+    bool unlink_on_close{false};
+    std::string unix_path{};
   };
 
   template <class Derived, class Receiver>

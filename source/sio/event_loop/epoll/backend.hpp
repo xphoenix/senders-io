@@ -15,6 +15,8 @@
 
 #include "../../sequence/buffered_sequence.hpp"
 #include "../../sequence/reduce.hpp"
+#include "../../local/socket_options.hpp"
+#include "../../local/stream_protocol.hpp"
 
 #include <stdexec/execution.hpp>
 
@@ -25,6 +27,7 @@
 
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 namespace sio::event_loop::epoll {
   class backend {
@@ -65,6 +68,34 @@ namespace sio::event_loop::epoll {
 
     void request_stop() {
       context_.request_stop();
+    }
+
+    template <class Protocol>
+      requires std::is_same_v<std::remove_cvref_t<Protocol>, ::sio::local::stream_protocol>
+    auto close(socket_state<Protocol>& state) noexcept {
+      auto path = std::move(state.unix_path);
+      const bool should_unlink = state.unlink_on_close && !path.empty();
+      state.unlink_on_close = false;
+      return fd_close_sender{&context_, state}
+           | ::stdexec::then([should_unlink, path = std::move(path)]() mutable {
+               if (should_unlink) {
+                 ::unlink(path.c_str());
+               }
+             });
+    }
+
+    template <class Protocol>
+      requires std::is_same_v<std::remove_cvref_t<Protocol>, ::sio::local::stream_protocol>
+    auto close(acceptor_state<Protocol>& state) noexcept {
+      auto path = std::move(state.unix_path);
+      const bool should_unlink = state.unlink_on_close && !path.empty();
+      state.unlink_on_close = false;
+      return fd_close_sender{&context_, state}
+           | ::stdexec::then([should_unlink, path = std::move(path)]() mutable {
+               if (should_unlink) {
+                 ::unlink(path.c_str());
+               }
+             });
     }
 
     template <class State>
@@ -185,26 +216,36 @@ namespace sio::event_loop::epoll {
     }
 
     template <class Protocol>
+    auto open_socket(Protocol protocol, ::sio::local::socket_options options) {
+      if constexpr (std::is_same_v<std::remove_cvref_t<Protocol>, ::sio::local::stream_protocol>) {
+        return ::stdexec::then(open_socket(protocol), [options](socket_state<Protocol> state) {
+          state.unlink_on_close = options.unlink_on_close;
+          return state;
+        });
+      } else {
+        (void) options;
+        return open_socket(protocol);
+      }
+    }
+
+    template <class Protocol>
     auto open_acceptor(Protocol protocol, typename Protocol::endpoint endpoint) {
       return ::stdexec::then(
         open_socket(protocol),
-        [this, endpoint = std::move(endpoint)](socket_state<Protocol> state) mutable {
+        [this, endpoint = std::move(endpoint), protocol](socket_state<Protocol> state) mutable {
           auto cleanup_on_error = [this, state](int err) {
             context_.release_entry(state);
             throw std::system_error(err, std::system_category());
           };
 
           int fd = context_.native_handle(state);
-          int one = 1;
-          if (
-            ::setsockopt(
-              fd,
-              SOL_SOCKET,
-              SO_REUSEADDR,
-              &one,
-              static_cast<socklen_t>(sizeof(one)))
-            == -1) {
-            cleanup_on_error(errno);
+          if (protocol.family() == AF_INET || protocol.family() == AF_INET6) {
+            int one = 1;
+            if (
+              ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, static_cast<socklen_t>(sizeof(one)))
+              == -1) {
+              cleanup_on_error(errno);
+            }
           }
           auto addr = reinterpret_cast<const sockaddr*>(endpoint.data());
           if (::bind(fd, addr, endpoint.size()) == -1) {
@@ -213,8 +254,54 @@ namespace sio::event_loop::epoll {
           if (::listen(fd, 16) == -1) {
             cleanup_on_error(errno);
           }
+          state.unlink_on_close = false;
           return acceptor_state<Protocol>{state};
         });
+    }
+
+    template <class Protocol>
+    auto open_acceptor(
+      Protocol protocol,
+      typename Protocol::endpoint endpoint,
+      ::sio::local::socket_options options) {
+      if constexpr (std::is_same_v<std::remove_cvref_t<Protocol>, ::sio::local::stream_protocol>) {
+        return ::stdexec::then(
+          open_socket(protocol, options),
+          [this, endpoint = std::move(endpoint), options, protocol](
+            socket_state<Protocol> state) mutable {
+            auto cleanup_on_error = [this, state](int err) {
+              context_.release_entry(state);
+              throw std::system_error(err, std::system_category());
+            };
+
+            int fd = context_.native_handle(state);
+            if (protocol.family() == AF_INET || protocol.family() == AF_INET6) {
+              int one = 1;
+              if (
+                ::setsockopt(
+                  fd, SOL_SOCKET, SO_REUSEADDR, &one, static_cast<socklen_t>(sizeof(one)))
+                == -1) {
+                cleanup_on_error(errno);
+              }
+            }
+            auto addr = reinterpret_cast<const sockaddr*>(endpoint.data());
+            if (::bind(fd, addr, endpoint.size()) == -1) {
+              cleanup_on_error(errno);
+            }
+            if (::listen(fd, 16) == -1) {
+              cleanup_on_error(errno);
+            }
+            acceptor_state<Protocol> acceptor{state};
+            if (options.unlink_on_close && endpoint.is_filesystem()) {
+              acceptor.unlink_on_close = true;
+              acceptor.unix_path = std::string(endpoint.path());
+            }
+            return acceptor;
+          });
+      } else {
+        (void) options;
+        return open_acceptor(std::move(protocol), std::move(endpoint));
+      }
     }
 
     template <class Protocol>
@@ -228,6 +315,13 @@ namespace sio::event_loop::epoll {
       auto addr = reinterpret_cast<const sockaddr*>(endpoint.data());
       if (::bind(fd, addr, endpoint.size()) == -1) {
         throw std::system_error(errno, std::system_category());
+      }
+      if constexpr (std::is_same_v<std::remove_cvref_t<Protocol>, ::sio::local::stream_protocol>) {
+        if (state.unlink_on_close && endpoint.is_filesystem()) {
+          state.unix_path = std::string(endpoint.path());
+        } else {
+          state.unix_path.clear();
+        }
       }
     }
 

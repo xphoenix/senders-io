@@ -7,6 +7,7 @@ set(SIO_TEST_NET_SOURCES
   test_endpoint.cpp
   test_resolve.cpp
   test_socket_handle.cpp
+  test_unix_socket.cpp
 )
 
 sio_add_test_target(sio_tests_net ${SIO_TEST_NET_SOURCES})
