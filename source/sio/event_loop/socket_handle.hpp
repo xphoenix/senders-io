@@ -84,6 +84,14 @@ namespace sio::event_loop {
       return context().write_some(const_cast<state_type&>(state()), buffer);
     }
 
+    auto read(buffers_type buffers) const {
+      return context().read(const_cast<state_type&>(state()), buffers);
+    }
+
+    auto read(buffer_type buffer) const {
+      return context().read(const_cast<state_type&>(state()), buffer);
+    }
+
     auto write(const_buffers_type buffers) const {
       return context().write(const_cast<state_type&>(state()), buffers);
     }
